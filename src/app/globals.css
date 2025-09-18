@@ -23,7 +23,7 @@
     --border: 220 13% 85%;
     --input: 220 13% 88%;
     --ring: 195 100% 50%;
-    --radius: 0.5rem;
+    --radius: 30px;
     --chart-1: 195 100% 50%;
     --chart-2: 16 100% 50%;
   }
@@ -61,5 +61,17 @@
     @apply bg-background text-foreground;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Custom styling for theme toggle dropdown items */
+@layer components {
+  .theme-toggle-item {
+    border-radius: 15px !important;
+  }
+  
+  /* Target the dropdown menu items specifically */
+  [data-radix-collection-item] {
+    border-radius: 15px !important;
   }
 }
