@@ -67,11 +67,21 @@
 /* Custom styling for theme toggle dropdown items */
 @layer components {
   .theme-toggle-item {
-    border-radius: 15px !important;
+    border-radius: 12px !important;
   }
   
   /* Target the dropdown menu items specifically */
   [data-radix-collection-item] {
-    border-radius: 15px !important;
+    border-radius: 12px !important;
+  }
+  
+  /* Target the dropdown menu container */
+  [data-radix-popper-content] {
+    border-radius: 12px !important;
+  }
+  
+  /* Target dropdown menu content specifically */
+  .dropdown-menu-content {
+    border-radius: 18px !important;
   }
 }
