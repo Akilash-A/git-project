@@ -1,4 +1,4 @@
-export type AttackType = "DDoS" | "Port Scan" | "Malware" | null;
+export type AttackType = "DDoS" | "Port Scan" | "Malware" | "Brute Force" | "Internal Threat" | null;
 
 export type Packet = {
   id: number;
@@ -8,6 +8,8 @@ export type Packet = {
   protocol: "TCP" | "UDP" | "ICMP";
   port: number;
   attackType: AttackType;
+  size?: number;
+  direction?: "incoming" | "outgoing";
 };
 
 export type Alert = {

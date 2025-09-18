@@ -93,6 +93,9 @@ export function PacketTable({
                 <TableHead>Source IP</TableHead>
                 <TableHead>Destination IP</TableHead>
                 <TableHead>Protocol</TableHead>
+                <TableHead>Port</TableHead>
+                <TableHead>Size</TableHead>
+                <TableHead>Direction</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Time</TableHead>
               </TableRow>
@@ -108,7 +111,20 @@ export function PacketTable({
                       </Button>
                     </TableCell>
                     <TableCell>{packet.destinationIp}</TableCell>
-                    <TableCell>{packet.protocol}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{packet.protocol}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{packet.port}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {packet.size ? `${packet.size} bytes` : 'N/A'}
+                    </TableCell>
+                    <TableCell>
+                      {packet.direction && (
+                        <Badge variant={packet.direction === 'incoming' ? 'default' : 'secondary'}>
+                          {packet.direction}
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {packet.attackType ? (
                         <Badge variant="destructive">{packet.attackType}</Badge>
@@ -126,7 +142,7 @@ export function PacketTable({
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={8}
                     className="h-24 text-center"
                   >
                     Monitoring for network packets...
