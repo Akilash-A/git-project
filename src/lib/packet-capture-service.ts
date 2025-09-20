@@ -106,6 +106,13 @@ export class PacketCaptureService {
     this.socket.on('network-interfaces', callback);
   }
 
+  onCriticalAttack(callback: (alert: any) => void) {
+    if (!this.socket) {
+      throw new Error('Not connected to packet monitor server');
+    }
+    this.socket.on('critical-attack', callback);
+  }
+
   isConnectedToServer(): boolean {
     return this.isConnected;
   }

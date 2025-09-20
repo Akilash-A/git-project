@@ -22,9 +22,44 @@ class PacketMonitor {
     this.selectedInterface = null;
     this.captureMethod = 'tshark';
     
+    // Advanced attack detection tracking
+    this.attackTracking = {
+      connectionCounts: new Map(),     // Track connections per IP
+      portScanAttempts: new Map(),     // Track port scanning
+      ddosCounters: new Map(),         // Track DDoS packets per IP
+      bruteForceAttempts: new Map(),   // Track brute force attempts
+      suspiciousIPs: new Set(),        // Flagged IPs
+      recentPackets: [],               // Recent packet history for analysis
+      
+      thresholds: {
+        ddosPacketsPerSecond: 50,      // DDoS threshold
+        portScanPorts: 10,             // Port scan threshold  
+        bruteForceAttempts: 5,         // Brute force threshold
+        connectionFlood: 100,          // Connection flood threshold
+        timeWindow: 10000              // 10 second analysis window
+      }
+    };
+    
+    // Clean up tracking data periodically
+    setInterval(() => this.cleanupTrackingData(), 30000); // Every 30 seconds
+    
+    // Advanced attack detection
+    this.attackDetection = {
+      connectionTracker: new Map(), // Track connections per IP
+      portScanTracker: new Map(),   // Track port scanning attempts
+      ddosThresholds: {
+        packetsPerSecond: 100,      // DDoS detection threshold
+        connectionsPerIP: 50,       // Connection flood threshold
+        timeWindow: 10000           // 10 second window
+      },
+      suspiciousIPs: new Set(),     // Known malicious IPs
+      localIPs: new Set()           // Your local IPs to protect
+    };
+    
     this.setupSocketHandlers();
     this.getNetworkInterfaces();
     this.checkCaptureTools();
+    this.initializeAttackDetection();
   }
 
   setupSocketHandlers() {
@@ -101,10 +136,59 @@ class PacketMonitor {
           netmask: ipv4.netmask,
           mac: ipv4.mac
         });
+        
+        // Add to local IPs for attack detection
+        this.attackDetection.localIPs.add(ipv4.address);
       }
     }
     
+    // Also add localhost for protection
+    this.attackDetection.localIPs.add('127.0.0.1');
+    
     console.log('Available network interfaces:', this.networkInterfaces);
+    console.log('🛡️  Protected local IPs:', Array.from(this.attackDetection.localIPs));
+  }
+
+  initializeAttackDetection() {
+    // Add your local IPs to protection list
+    this.networkInterfaces.forEach(iface => {
+      this.attackDetection.localIPs.add(iface.address);
+    });
+    
+    // Add common local network ranges
+    this.attackDetection.localIPs.add('127.0.0.1');
+    this.attackDetection.localIPs.add('localhost');
+    
+    console.log('🛡️  Protected IPs:', Array.from(this.attackDetection.localIPs));
+    
+    // Clean up tracking data every 30 seconds
+    setInterval(() => {
+      this.cleanupTrackingData();
+    }, 30000);
+  }
+
+  cleanupTrackingData() {
+    const now = Date.now();
+    const timeWindow = this.attackDetection.ddosThresholds.timeWindow;
+    
+    // Clean old connection tracking data
+    for (const [ip, data] of this.attackDetection.connectionTracker) {
+      data.timestamps = data.timestamps.filter(timestamp => now - timestamp < timeWindow);
+      data.ports = data.ports.filter(portData => now - portData.timestamp < timeWindow);
+      
+      if (data.timestamps.length === 0 && data.ports.length === 0) {
+        this.attackDetection.connectionTracker.delete(ip);
+      }
+    }
+    
+    // Clean old port scan tracking data
+    for (const [ip, data] of this.attackDetection.portScanTracker) {
+      data.ports = data.ports.filter(portData => now - portData.timestamp < timeWindow);
+      
+      if (data.ports.length === 0) {
+        this.attackDetection.portScanTracker.delete(ip);
+      }
+    }
   }
 
   startRealPacketCapture(options = {}) {
@@ -358,32 +442,179 @@ class PacketMonitor {
   }
 
   detectAttack(sourceIp, destinationIp, port) {
-    // Enhanced attack detection
-    const suspiciousPorts = [23, 135, 139, 445, 1433, 3389, 22]; // Telnet, RPC, NetBIOS, SMB, SQL, RDP, SSH
-    const knownAttackPorts = [4444, 6666, 31337, 12345]; // Common backdoor ports
+    const now = Date.now();
+    const isTargetingMyIP = this.attackDetection.localIPs.has(destinationIp);
+    const isFromMyIP = this.attackDetection.localIPs.has(sourceIp);
     
-    // Check for suspicious ports
-    if (suspiciousPorts.includes(port)) {
-      return Math.random() < 0.4 ? 'Port Scan' : null;
+    // Track connections for DDoS detection
+    this.trackConnection(sourceIp, destinationIp, port, now);
+    
+    // Enhanced attack detection targeting YOUR IP
+    const suspiciousPorts = [23, 135, 139, 445, 1433, 3389, 22, 21, 25, 53, 110, 143]; 
+    const knownAttackPorts = [4444, 6666, 31337, 12345, 1337, 8080, 9999];
+    const bruteForceports = [22, 21, 23, 25, 110, 143, 993, 995, 3389]; // SSH, FTP, Telnet, SMTP, POP3, IMAP, RDP
+    
+    // 🚨 CRITICAL: DDoS Detection targeting your IP
+    if (isTargetingMyIP) {
+      const ddosResult = this.detectDDoS(sourceIp, destinationIp, now);
+      if (ddosResult) {
+        console.log(`🚨 DDoS ATTACK DETECTED! ${sourceIp} → ${destinationIp}:${port}`);
+        this.alertHighSeverityAttack('DDoS', sourceIp, destinationIp, port);
+        return ddosResult;
+      }
     }
     
-    // Check for known attack ports
-    if (knownAttackPorts.includes(port)) {
+    // 🚨 Port Scan Detection targeting your IP
+    if (isTargetingMyIP) {
+      const portScanResult = this.detectPortScan(sourceIp, destinationIp, port, now);
+      if (portScanResult) {
+        console.log(`🚨 PORT SCAN DETECTED! ${sourceIp} scanning ${destinationIp}`);
+        this.alertHighSeverityAttack('Port Scan', sourceIp, destinationIp, port);
+        return portScanResult;
+      }
+    }
+    
+    // 🚨 Brute Force Attack Detection
+    if (isTargetingMyIP && bruteForceports.includes(port)) {
+      const bruteForceResult = this.detectBruteForce(sourceIp, destinationIp, port, now);
+      if (bruteForceResult) {
+        console.log(`🚨 BRUTE FORCE ATTACK! ${sourceIp} → ${destinationIp}:${port}`);
+        this.alertHighSeverityAttack('Brute Force', sourceIp, destinationIp, port);
+        return bruteForceResult;
+      }
+    }
+    
+    // 🚨 Suspicious Port Access targeting your IP
+    if (isTargetingMyIP && suspiciousPorts.includes(port)) {
+      console.log(`⚠️  Suspicious port access: ${sourceIp} → ${destinationIp}:${port}`);
+      return 'Port Scan';
+    }
+    
+    // 🚨 Known Malicious Ports targeting your IP
+    if (isTargetingMyIP && knownAttackPorts.includes(port)) {
+      console.log(`🚨 MALWARE DETECTED! ${sourceIp} → ${destinationIp}:${port}`);
+      this.alertHighSeverityAttack('Malware', sourceIp, destinationIp, port);
       return 'Malware';
     }
     
-    // Check for internal network scanning
-    if (this.isPrivateIP(sourceIp) && this.isPrivateIP(destinationIp)) {
-      return Math.random() < 0.03 ? 'Internal Threat' : null;
+    // 🚨 External IP trying to access internal services
+    if (isTargetingMyIP && !this.isPrivateIP(sourceIp) && this.isPrivateServicePort(port)) {
+      console.log(`🚨 EXTERNAL ACCESS ATTEMPT! ${sourceIp} → ${destinationIp}:${port}`);
+      return 'Unauthorized Access';
     }
     
-    // Random attack detection (reduced frequency for real monitoring)
-    if (Math.random() < 0.01) { // 1% chance
-      const attacks = ['DDoS', 'Port Scan', 'Brute Force'];
-      return attacks[Math.floor(Math.random() * attacks.length)];
+    // 🚨 Known suspicious IP
+    if (this.attackDetection.suspiciousIPs.has(sourceIp)) {
+      console.log(`🚨 KNOWN THREAT! Suspicious IP ${sourceIp} → ${destinationIp}:${port}`);
+      return 'Known Threat';
     }
     
     return null;
+  }
+
+  trackConnection(sourceIp, destinationIp, port, timestamp) {
+    if (!this.attackDetection.connectionTracker.has(sourceIp)) {
+      this.attackDetection.connectionTracker.set(sourceIp, {
+        timestamps: [],
+        ports: [],
+        targetIPs: new Set()
+      });
+    }
+    
+    const tracker = this.attackDetection.connectionTracker.get(sourceIp);
+    tracker.timestamps.push(timestamp);
+    tracker.ports.push({ port, timestamp, targetIP: destinationIp });
+    tracker.targetIPs.add(destinationIp);
+  }
+
+  detectDDoS(sourceIp, destinationIp, now) {
+    const tracker = this.attackDetection.connectionTracker.get(sourceIp);
+    if (!tracker) return null;
+    
+    const timeWindow = this.attackDetection.ddosThresholds.timeWindow;
+    const recentConnections = tracker.timestamps.filter(ts => now - ts < timeWindow);
+    
+    // High volume of packets from single IP to your IP
+    if (recentConnections.length > this.attackDetection.ddosThresholds.packetsPerSecond) {
+      this.attackDetection.suspiciousIPs.add(sourceIp);
+      return 'DDoS';
+    }
+    
+    // Connection flood detection
+    if (recentConnections.length > this.attackDetection.ddosThresholds.connectionsPerIP) {
+      return 'Connection Flood';
+    }
+    
+    return null;
+  }
+
+  detectPortScan(sourceIp, destinationIp, port, now) {
+    if (!this.attackDetection.portScanTracker.has(sourceIp)) {
+      this.attackDetection.portScanTracker.set(sourceIp, {
+        ports: [],
+        targets: new Set()
+      });
+    }
+    
+    const scanner = this.attackDetection.portScanTracker.get(sourceIp);
+    scanner.ports.push({ port, timestamp: now, target: destinationIp });
+    scanner.targets.add(destinationIp);
+    
+    const timeWindow = this.attackDetection.ddosThresholds.timeWindow;
+    const recentPorts = scanner.ports.filter(p => now - p.timestamp < timeWindow);
+    
+    // Multiple ports accessed on your IP in short time
+    const uniquePorts = new Set(recentPorts.map(p => p.port));
+    if (uniquePorts.size > 10) { // More than 10 different ports
+      this.attackDetection.suspiciousIPs.add(sourceIp);
+      return 'Port Scan';
+    }
+    
+    return null;
+  }
+
+  detectBruteForce(sourceIp, destinationIp, port, now) {
+    const tracker = this.attackDetection.connectionTracker.get(sourceIp);
+    if (!tracker) return null;
+    
+    const timeWindow = 60000; // 1 minute window for brute force
+    const samePortConnections = tracker.ports.filter(p => 
+      p.port === port && 
+      p.targetIP === destinationIp && 
+      now - p.timestamp < timeWindow
+    );
+    
+    // Multiple rapid connections to same service port
+    if (samePortConnections.length > 20) { // More than 20 attempts per minute
+      this.attackDetection.suspiciousIPs.add(sourceIp);
+      return 'Brute Force';
+    }
+    
+    return null;
+  }
+
+  isPrivateServicePort(port) {
+    const privateServicePorts = [
+      139, 445, // SMB/NetBIOS
+      135, 1433, // RPC, SQL Server
+      5432, 3306, // PostgreSQL, MySQL
+      6379, 11211, // Redis, Memcached
+      9200, 9300 // Elasticsearch
+    ];
+    return privateServicePorts.includes(port);
+  }
+
+  alertHighSeverityAttack(attackType, sourceIp, destinationIp, port) {
+    // Send immediate high-priority alert
+    this.io.emit('critical-attack', {
+      severity: 'CRITICAL',
+      attackType,
+      sourceIp,
+      destinationIp,
+      port,
+      timestamp: new Date().toISOString(),
+      message: `🚨 CRITICAL: ${attackType} attack from ${sourceIp} targeting YOUR IP ${destinationIp}:${port}`
+    });
   }
 
   isPrivateIP(ip) {

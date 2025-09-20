@@ -73,6 +73,37 @@ export function DashboardClient() {
         }
       });
       
+      // Set up critical attack alerts
+      packetCaptureService.onCriticalAttack((criticalAlert) => {
+        setAlerts((prev) => [{
+          id: Date.now(),
+          timestamp: criticalAlert.timestamp,
+          message: criticalAlert.message,
+          ip: criticalAlert.sourceIp,
+          type: criticalAlert.attackType
+        }, ...prev].slice(0, MAX_ALERTS));
+        
+        setAttacksDetected((prev) => prev + 1);
+        
+        // Show urgent toast for critical attacks
+        toast({
+          variant: "destructive",
+          title: "🚨 CRITICAL ATTACK DETECTED!",
+          description: `${criticalAlert.attackType} targeting YOUR IP from ${criticalAlert.sourceIp}`,
+          duration: 10000, // Show longer for critical alerts
+        });
+        
+        // Play alert sound (if available)
+        if (typeof Audio !== 'undefined') {
+          try {
+            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmEcBzVdmcPy2YU2Bhdr0O3XiTIGHm/E7+OVFVX'); 
+            audio.play();
+          } catch (e) {
+            console.log('Audio notification not available');
+          }
+        }
+      });
+      
       // Set up network interfaces listener
       packetCaptureService.onNetworkInterfaces((interfaces) => {
         setNetworkInterfaces(interfaces);

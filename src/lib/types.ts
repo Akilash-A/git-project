@@ -1,4 +1,4 @@
-export type AttackType = "DDoS" | "Port Scan" | "Malware" | "Brute Force" | "Internal Threat" | null;
+export type AttackType = "DDoS" | "Port Scan" | "Malware" | "Brute Force" | "Internal Threat" | "Connection Flood" | "Unauthorized Access" | "Known Threat" | null;
 
 export type Packet = {
   id: number;
