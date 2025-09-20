@@ -48,8 +48,8 @@ class PacketMonitor {
       connectionTracker: new Map(), // Track connections per IP
       portScanTracker: new Map(),   // Track port scanning attempts
       ddosThresholds: {
-        packetsPerSecond: 100,      // DDoS detection threshold
-        connectionsPerIP: 50,       // Connection flood threshold
+        packetsPerSecond: 20,       // DDoS detection threshold (lowered for better detection)
+        connectionsPerIP: 15,       // Connection flood threshold (lowered)
         timeWindow: 10000           // 10 second window
       },
       suspiciousIPs: new Set(),     // Known malicious IPs
@@ -153,6 +153,26 @@ class PacketMonitor {
     // Add your local IPs to protection list
     this.networkInterfaces.forEach(iface => {
       this.attackDetection.localIPs.add(iface.address);
+      
+      // Add the entire subnet as trusted (like 10.185.126.x for your network)
+      const ip = iface.address;
+      const netmask = iface.netmask;
+      if (ip && netmask) {
+        // Calculate network address and add common gateway IPs
+        const ipParts = ip.split('.').map(Number);
+        const netmaskParts = netmask.split('.').map(Number);
+        
+        // Calculate network base
+        const networkBase = ipParts.map((part, i) => part & netmaskParts[i]);
+        
+        // Add common gateway addresses for this network
+        const networkBaseStr = networkBase.slice(0, 3).join('.');
+        this.attackDetection.localIPs.add(`${networkBaseStr}.1`);    // Common gateway
+        this.attackDetection.localIPs.add(`${networkBaseStr}.254`);  // Common gateway
+        this.attackDetection.localIPs.add(`${networkBaseStr}.238`);  // Your specific gateway
+        
+        console.log(`🛡️  Added network ${networkBaseStr}.x to trusted IPs`);
+      }
     });
     
     // Add common local network ranges
@@ -470,6 +490,18 @@ class PacketMonitor {
     const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     return ipRegex.test(ip);
   }
+  
+  isInSameNetwork(ip1, ip2) {
+    // Check if two IPs are in the same /24 network (common for home networks)
+    if (!ip1 || !ip2) return false;
+    const ip1Parts = ip1.split('.');
+    const ip2Parts = ip2.split('.');
+    
+    // Compare first 3 octets for /24 network
+    return ip1Parts[0] === ip2Parts[0] && 
+           ip1Parts[1] === ip2Parts[1] && 
+           ip1Parts[2] === ip2Parts[2];
+  }
 
   extractPacketSize(line) {
     const sizeMatch = line.match(/length (\d+)/);
@@ -517,12 +549,23 @@ class PacketMonitor {
     const now = Date.now();
     const isTargetingMyIP = this.attackDetection.localIPs.has(destinationIp);
     const isFromMyIP = this.attackDetection.localIPs.has(sourceIp);
+    const isFromTrustedLocalIP = this.attackDetection.localIPs.has(sourceIp);
+    
+    // Skip threat detection ONLY for normal router/gateway services
+    if (isFromTrustedLocalIP && isTargetingMyIP) {
+      const normalRouterPorts = [53, 67, 68]; // DNS, DHCP
+      if (normalRouterPorts.includes(port)) {
+        // This is normal router/gateway traffic (DNS, DHCP)
+        return null;
+      }
+      // For other ports from trusted IPs, still check for attacks but with lower sensitivity
+    }
     
     // Track connections for DDoS detection
     this.trackConnection(sourceIp, destinationIp, port, now);
     
     // Enhanced attack detection targeting YOUR IP
-    const suspiciousPorts = [23, 135, 139, 445, 1433, 3389, 22, 21, 25, 53, 110, 143]; 
+    const suspiciousPorts = [23, 135, 139, 445, 1433, 3389, 22, 21, 25, 110, 143]; // Removed 53 (DNS)
     const knownAttackPorts = [4444, 6666, 31337, 12345, 1337, 8080, 9999];
     const bruteForceports = [22, 21, 23, 25, 110, 143, 993, 995, 3389]; // SSH, FTP, Telnet, SMTP, POP3, IMAP, RDP
     
@@ -530,8 +573,11 @@ class PacketMonitor {
     if (isTargetingMyIP) {
       const ddosResult = this.detectDDoS(sourceIp, destinationIp, now);
       if (ddosResult) {
-        console.log(`🚨 DDoS ATTACK DETECTED! ${sourceIp} → ${destinationIp}:${port}`);
-        this.alertHighSeverityAttack('DDoS', sourceIp, destinationIp, port);
+        // Only log attacks from non-trusted IPs
+        if (!isFromTrustedLocalIP) {
+          console.log(`🚨 DDoS ATTACK DETECTED! ${sourceIp} → ${destinationIp}:${port}`);
+          this.alertHighSeverityAttack('DDoS', sourceIp, destinationIp, port);
+        }
         return ddosResult;
       }
     }
@@ -540,8 +586,11 @@ class PacketMonitor {
     if (isTargetingMyIP) {
       const portScanResult = this.detectPortScan(sourceIp, destinationIp, port, now);
       if (portScanResult) {
-        console.log(`🚨 PORT SCAN DETECTED! ${sourceIp} scanning ${destinationIp}`);
-        this.alertHighSeverityAttack('Port Scan', sourceIp, destinationIp, port);
+        // Only log attacks from non-trusted IPs
+        if (!isFromTrustedLocalIP) {
+          console.log(`🚨 PORT SCAN DETECTED! ${sourceIp} scanning ${destinationIp}`);
+          this.alertHighSeverityAttack('Port Scan', sourceIp, destinationIp, port);
+        }
         return portScanResult;
       }
     }
@@ -550,22 +599,31 @@ class PacketMonitor {
     if (isTargetingMyIP && bruteForceports.includes(port)) {
       const bruteForceResult = this.detectBruteForce(sourceIp, destinationIp, port, now);
       if (bruteForceResult) {
-        console.log(`🚨 BRUTE FORCE ATTACK! ${sourceIp} → ${destinationIp}:${port}`);
-        this.alertHighSeverityAttack('Brute Force', sourceIp, destinationIp, port);
+        // Only log attacks from non-trusted IPs
+        if (!isFromTrustedLocalIP) {
+          console.log(`🚨 BRUTE FORCE ATTACK! ${sourceIp} → ${destinationIp}:${port}`);
+          this.alertHighSeverityAttack('Brute Force', sourceIp, destinationIp, port);
+        }
         return bruteForceResult;
       }
     }
     
     // 🚨 Suspicious Port Access targeting your IP
     if (isTargetingMyIP && suspiciousPorts.includes(port)) {
-      console.log(`⚠️  Suspicious port access: ${sourceIp} → ${destinationIp}:${port}`);
+      // Only log attacks from non-trusted IPs
+      if (!isFromTrustedLocalIP) {
+        console.log(`⚠️  Suspicious port access: ${sourceIp} → ${destinationIp}:${port}`);
+      }
       return 'Port Scan';
     }
     
     // 🚨 Known Malicious Ports targeting your IP
     if (isTargetingMyIP && knownAttackPorts.includes(port)) {
-      console.log(`🚨 MALWARE DETECTED! ${sourceIp} → ${destinationIp}:${port}`);
-      this.alertHighSeverityAttack('Malware', sourceIp, destinationIp, port);
+      // Only log attacks from non-trusted IPs
+      if (!isFromTrustedLocalIP) {
+        console.log(`🚨 MALWARE DETECTED! ${sourceIp} → ${destinationIp}:${port}`);
+        this.alertHighSeverityAttack('Malware', sourceIp, destinationIp, port);
+      }
       return 'Malware';
     }
     
@@ -577,7 +635,10 @@ class PacketMonitor {
     
     // 🚨 Known suspicious IP
     if (this.attackDetection.suspiciousIPs.has(sourceIp)) {
-      console.log(`🚨 KNOWN THREAT! Suspicious IP ${sourceIp} → ${destinationIp}:${port}`);
+      // Only log attacks from non-trusted IPs
+      if (!isFromTrustedLocalIP) {
+        console.log(`🚨 KNOWN THREAT! Suspicious IP ${sourceIp} → ${destinationIp}:${port}`);
+      }
       return 'Known Threat';
     }
     
@@ -608,7 +669,10 @@ class PacketMonitor {
     
     // High volume of packets from single IP to your IP
     if (recentConnections.length > this.attackDetection.ddosThresholds.packetsPerSecond) {
-      this.attackDetection.suspiciousIPs.add(sourceIp);
+      // Don't mark trusted IPs as suspicious
+      if (!this.attackDetection.localIPs.has(sourceIp)) {
+        this.attackDetection.suspiciousIPs.add(sourceIp);
+      }
       return 'DDoS';
     }
     
@@ -637,8 +701,11 @@ class PacketMonitor {
     
     // Multiple ports accessed on your IP in short time
     const uniquePorts = new Set(recentPorts.map(p => p.port));
-    if (uniquePorts.size > 10) { // More than 10 different ports
-      this.attackDetection.suspiciousIPs.add(sourceIp);
+    if (uniquePorts.size > 5) { // More than 5 different ports (lowered from 10)
+      // Don't mark trusted IPs as suspicious
+      if (!this.attackDetection.localIPs.has(sourceIp)) {
+        this.attackDetection.suspiciousIPs.add(sourceIp);
+      }
       return 'Port Scan';
     }
     
@@ -657,8 +724,11 @@ class PacketMonitor {
     );
     
     // Multiple rapid connections to same service port
-    if (samePortConnections.length > 20) { // More than 20 attempts per minute
-      this.attackDetection.suspiciousIPs.add(sourceIp);
+    if (samePortConnections.length > 10) { // More than 10 attempts per minute (lowered from 20)
+      // Don't mark trusted IPs as suspicious
+      if (!this.attackDetection.localIPs.has(sourceIp)) {
+        this.attackDetection.suspiciousIPs.add(sourceIp);
+      }
       return 'Brute Force';
     }
     
@@ -713,20 +783,20 @@ class PacketMonitor {
       
       this.io.emit('new-packet', { packet, alert });
       
-      // Enhanced logging for debugging
-      const direction = packet.direction === 'incoming' ? '⬇️' : 
-                       packet.direction === 'outgoing' ? '⬆️' : 
-                       packet.direction === 'local' ? '🏠' : '↔️';
-      
-      const attackIndicator = packet.attackType ? `⚠️ ${packet.attackType}` : '✅ Normal';
-      
-      console.log(`📦 ${direction} ${packet.sourceIp}:${packet.port} → ${packet.destinationIp} (${packet.protocol}, ${packet.size}B) ${attackIndicator}`);
+      // Enhanced logging for debugging - commented out to reduce terminal noise
+      // const direction = packet.direction === 'incoming' ? '⬇️' : 
+      //                  packet.direction === 'outgoing' ? '⬆️' : 
+      //                  packet.direction === 'local' ? '🏠' : '↔️';
+      // 
+      // const attackIndicator = packet.attackType ? `⚠️ ${packet.attackType}` : '✅ Normal';
+      // 
+      // console.log(`📦 ${direction} ${packet.sourceIp}:${packet.port} → ${packet.destinationIp} (${packet.protocol}, ${packet.size}B) ${attackIndicator}`);
     }
   }
 
   getLocalIP() {
     return this.networkInterfaces.length > 0 ? this.networkInterfaces[0].address : '127.0.0.1';
-  }
+  }g
 
   getDefaultInterface() {
     return this.networkInterfaces.length > 0 ? this.networkInterfaces[0].name : 'any';
