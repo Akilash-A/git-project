@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Gauge, AlertTriangle, ShieldCheck, Wifi, WifiOff } from "lucide-react";
 
 import type { Packet, Alert } from "@/lib/types";
@@ -33,6 +33,13 @@ export function DashboardClient() {
   const [networkInterfaces, setNetworkInterfaces] = useState<NetworkInterface[]>([]);
   const [selectedInterface, setSelectedInterface] = useState<string>("");
   const [useMockData, setUseMockData] = useState(false);
+  
+  // Use useRef to track isPaused state for the packet listener closure
+  const isPausedRef = useRef(isPaused);
+  
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
   useEffect(() => {
     const storedIps = localStorage.getItem("whitelistedIps");
@@ -51,7 +58,8 @@ export function DashboardClient() {
       
       // Set up packet listener
       packetCaptureService.onPacket(({ packet, alert }) => {
-        if (isPaused) return;
+        // Use ref to get current paused state instead of stale closure value
+        if (isPausedRef.current) return;
         
         // Check if IP is whitelisted
         const isWhitelisted = whitelistedIps.includes(packet.sourceIp);

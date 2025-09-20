@@ -48,7 +48,7 @@ export function PacketTable({
         <div className="grid gap-2">
             <CardTitle>Network Monitor</CardTitle>
             <CardDescription>
-            Live stream of network packets.
+            {isPaused ? "Live stream paused" : "Live stream of network packets."}
             </CardDescription>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -120,8 +120,14 @@ export function PacketTable({
                     </TableCell>
                     <TableCell>
                       {packet.direction && (
-                        <Badge variant={packet.direction === 'incoming' ? 'default' : 'secondary'}>
-                          {packet.direction}
+                        <Badge variant={
+                          packet.direction === 'incoming' ? 'destructive' : 
+                          packet.direction === 'outgoing' ? 'default' : 
+                          packet.direction === 'local' ? 'secondary' : 'outline'
+                        }>
+                          {packet.direction === 'incoming' ? 'Incoming' : 
+                           packet.direction === 'outgoing' ? 'Outgoing' : 
+                           packet.direction === 'local' ? 'Local' : 'Passing'}
                         </Badge>
                       )}
                     </TableCell>

@@ -364,31 +364,56 @@ class PacketMonitor {
   parseTsharkLine(line) {
     try {
       const fields = line.split('|');
-      if (fields.length >= 8) {
+      if (fields.length >= 10) {
         const [frameNum, timestamp, srcIp, dstIp, protocols, tcpSrcPort, tcpDstPort, udpSrcPort, udpDstPort, frameLen] = fields;
         
-        if (srcIp && dstIp && srcIp !== '' && dstIp !== '') {
-          const protocol = this.extractProtocol(protocols);
-          const srcPort = tcpSrcPort || udpSrcPort || 0;
-          const dstPort = tcpDstPort || udpDstPort || 0;
-          
-          const packet = {
-            id: this.packetIdCounter++,
-            timestamp: new Date(parseFloat(timestamp) * 1000).toISOString(),
-            sourceIp: srcIp,
-            destinationIp: dstIp,
-            protocol: protocol,
-            port: parseInt(srcPort) || parseInt(dstPort) || 0,
-            size: parseInt(frameLen) || 0,
-            direction: this.determineDirection(srcIp, dstIp),
-            attackType: this.detectAttack(srcIp, dstIp, parseInt(srcPort) || parseInt(dstPort) || 0)
-          };
-          
-          this.emitPacket(packet);
+        // Skip lines with empty or invalid IPs
+        if (!srcIp || !dstIp || srcIp === '' || dstIp === '' || srcIp === '-' || dstIp === '-') {
+          return;
         }
+        
+        // Clean up IP addresses (remove any extra characters)
+        const cleanSrcIp = srcIp.trim();
+        const cleanDstIp = dstIp.trim();
+        
+        // Skip if IPs are not valid IPv4 addresses
+        if (!this.isValidIPv4(cleanSrcIp) || !this.isValidIPv4(cleanDstIp)) {
+          return;
+        }
+        
+        const protocol = this.extractProtocol(protocols);
+        
+        // Better port extraction - get the first non-empty port
+        let sourcePort = 0;
+        let destPort = 0;
+        
+        if (protocol === 'TCP') {
+          sourcePort = parseInt(tcpSrcPort) || 0;
+          destPort = parseInt(tcpDstPort) || 0;
+        } else if (protocol === 'UDP') {
+          sourcePort = parseInt(udpSrcPort) || 0;
+          destPort = parseInt(udpDstPort) || 0;
+        }
+        
+        // Use destination port as the primary port for display
+        const displayPort = destPort || sourcePort || 0;
+        
+        const packet = {
+          id: this.packetIdCounter++,
+          timestamp: new Date(parseFloat(timestamp) * 1000).toISOString(),
+          sourceIp: cleanSrcIp,
+          destinationIp: cleanDstIp,
+          protocol: protocol,
+          port: displayPort,
+          size: parseInt(frameLen) || 0,
+          direction: this.determineDirection(cleanSrcIp, cleanDstIp),
+          attackType: this.detectAttack(cleanSrcIp, cleanDstIp, displayPort)
+        };
+        
+        this.emitPacket(packet);
       }
     } catch (error) {
-      console.error('Error parsing tshark line:', error);
+      console.error('Error parsing tshark line:', error, 'Line:', line);
     }
   }
 
@@ -400,7 +425,14 @@ class PacketMonitor {
       
       if (ipMatch) {
         const [, srcIp, srcPort, dstIp, dstPort] = ipMatch;
+        
+        // Validate IPs
+        if (!this.isValidIPv4(srcIp) || !this.isValidIPv4(dstIp)) {
+          return;
+        }
+        
         const protocol = protocolMatch ? protocolMatch[1].toUpperCase() : 'TCP';
+        const displayPort = parseInt(dstPort) || parseInt(srcPort) || 0;
         
         const packet = {
           id: this.packetIdCounter++,
@@ -408,25 +440,35 @@ class PacketMonitor {
           sourceIp: srcIp,
           destinationIp: dstIp,
           protocol: protocol,
-          port: parseInt(srcPort) || 0,
+          port: displayPort,
           size: this.extractPacketSize(line),
           direction: this.determineDirection(srcIp, dstIp),
-          attackType: this.detectAttack(srcIp, dstIp, parseInt(srcPort) || 0)
+          attackType: this.detectAttack(srcIp, dstIp, displayPort)
         };
         
         this.emitPacket(packet);
       }
     } catch (error) {
-      console.error('Error parsing tcpdump line:', error);
+      console.error('Error parsing tcpdump line:', error, 'Line:', line);
     }
   }
 
   extractProtocol(protocols) {
     if (!protocols) return 'TCP';
-    if (protocols.includes('tcp')) return 'TCP';
-    if (protocols.includes('udp')) return 'UDP';
-    if (protocols.includes('icmp')) return 'ICMP';
-    return 'TCP';
+    const protocolStr = protocols.toLowerCase();
+    if (protocolStr.includes('tcp')) return 'TCP';
+    if (protocolStr.includes('udp')) return 'UDP';
+    if (protocolStr.includes('icmp')) return 'ICMP';
+    if (protocolStr.includes('http')) return 'TCP'; // HTTP runs on TCP
+    if (protocolStr.includes('https')) return 'TCP'; // HTTPS runs on TCP
+    if (protocolStr.includes('dns')) return 'UDP'; // DNS usually runs on UDP
+    return 'TCP'; // Default to TCP
+  }
+  
+  isValidIPv4(ip) {
+    if (!ip || typeof ip !== 'string') return false;
+    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    return ipRegex.test(ip);
   }
 
   extractPacketSize(line) {
@@ -435,9 +477,39 @@ class PacketMonitor {
   }
 
   determineDirection(srcIp, dstIp) {
-    const localIp = this.getLocalIP();
-    if (srcIp === localIp) return 'outgoing';
-    if (dstIp === localIp) return 'incoming';
+    const localIps = Array.from(this.attackDetection.localIPs);
+    
+    // Check if source is local and destination is external
+    if (localIps.includes(srcIp) && !localIps.includes(dstIp)) {
+      return 'outgoing';
+    }
+    
+    // Check if source is external and destination is local
+    if (!localIps.includes(srcIp) && localIps.includes(dstIp)) {
+      return 'incoming';
+    }
+    
+    // Check private IP ranges for local network traffic
+    const isPrivateIP = (ip) => {
+      return ip.startsWith('192.168.') || 
+             ip.startsWith('10.') || 
+             ip.startsWith('172.16.') || 
+             ip.startsWith('172.17.') ||
+             ip.startsWith('172.18.') ||
+             ip.startsWith('172.19.') ||
+             ip.startsWith('172.2') ||
+             ip.startsWith('172.30.') ||
+             ip.startsWith('172.31.') ||
+             ip === '127.0.0.1' ||
+             ip === 'localhost';
+    };
+    
+    // If both are private, it's local traffic
+    if (isPrivateIP(srcIp) && isPrivateIP(dstIp)) {
+      return 'local';
+    }
+    
+    // Default case - traffic passing through
     return 'passing';
   }
 
@@ -641,8 +713,14 @@ class PacketMonitor {
       
       this.io.emit('new-packet', { packet, alert });
       
-      // Log packet for debugging
-      console.log(`📦 ${packet.sourceIp}:${packet.port} → ${packet.destinationIp} (${packet.protocol}, ${packet.size}B) ${packet.attackType ? '⚠️ ' + packet.attackType : ''}`);
+      // Enhanced logging for debugging
+      const direction = packet.direction === 'incoming' ? '⬇️' : 
+                       packet.direction === 'outgoing' ? '⬆️' : 
+                       packet.direction === 'local' ? '🏠' : '↔️';
+      
+      const attackIndicator = packet.attackType ? `⚠️ ${packet.attackType}` : '✅ Normal';
+      
+      console.log(`📦 ${direction} ${packet.sourceIp}:${packet.port} → ${packet.destinationIp} (${packet.protocol}, ${packet.size}B) ${attackIndicator}`);
     }
   }
 

@@ -9,7 +9,7 @@ export type Packet = {
   port: number;
   attackType: AttackType;
   size?: number;
-  direction?: "incoming" | "outgoing";
+  direction?: "incoming" | "outgoing" | "local" | "passing";
 };
 
 export type Alert = {
