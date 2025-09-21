@@ -70,10 +70,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 )}
               >
                 <BarChart3 className="h-5 w-5" />
-                <span className="sr-only">Scoreboard</span>
+                <span className="sr-only">Security Analysis</span>
               </Link>
             </TooltipTrigger>
-            <TooltipContent side="right">Scoreboard</TooltipContent>
+            <TooltipContent side="right">Security Analysis</TooltipContent>
           </Tooltip>
         </nav>
       </aside>

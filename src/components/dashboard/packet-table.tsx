@@ -1,5 +1,5 @@
 
-import { Pause, Play, Search } from "lucide-react";
+import { Pause, Play, Search, Activity } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 import type { Packet } from "@/lib/types";
@@ -34,6 +34,7 @@ interface PacketTableProps {
   isPaused: boolean;
   onPauseToggle: () => void;
   onIpSelect: (ip: string) => void;
+  onIpDangerScore?: (ip: string) => void;
 }
 
 export function PacketTable({
@@ -41,6 +42,7 @@ export function PacketTable({
   isPaused,
   onPauseToggle,
   onIpSelect,
+  onIpDangerScore,
 }: PacketTableProps) {
   return (
     <Card>
@@ -105,12 +107,56 @@ export function PacketTable({
                 packets.map((packet) => (
                   <TableRow key={packet.id}>
                     <TableCell>
-                      <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => onIpSelect(packet.sourceIp)}>
-                        {packet.sourceIp}
-                        <Search className="ml-2 h-3 w-3" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => onIpSelect(packet.sourceIp)}>
+                          {packet.sourceIp}
+                          <Search className="ml-1 h-3 w-3" />
+                        </Button>
+                        {onIpDangerScore && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="p-1 h-auto w-auto"
+                                  onClick={() => onIpDangerScore(packet.sourceIp)}
+                                >
+                                  <Activity className="h-3 w-3 text-orange-500" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Check danger score</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
                     </TableCell>
-                    <TableCell>{packet.destinationIp}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <span className="font-mono text-sm">{packet.destinationIp}</span>
+                        {onIpDangerScore && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="p-1 h-auto w-auto"
+                                  onClick={() => onIpDangerScore(packet.destinationIp)}
+                                >
+                                  <Activity className="h-3 w-3 text-orange-500" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Check danger score</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{packet.protocol}</Badge>
                     </TableCell>

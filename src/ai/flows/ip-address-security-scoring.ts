@@ -22,6 +22,11 @@ const IpAddressSecurityScoringOutputSchema = z.object({
   securityScore: z
     .string()
     .describe('A security score for the IP address, indicating whether it is safe or unsafe.'),
+  dangerScore: z
+    .number()
+    .min(0)
+    .max(100)
+    .describe('A numerical danger score from 0-100, where 0 is completely safe and 100 is extremely dangerous.'),
   analysisDetails: z
     .string()
     .describe('Detailed analysis of the IP address, including any threat information.'),
@@ -39,13 +44,22 @@ const prompt = ai.definePrompt({
   prompt: `You are a security expert analyzing IP addresses to determine their security risk.
 
   Analyze the provided IP address against security reputation databases and threat intelligence feeds to assess its risk level.
-  Provide a security score (safe or unsafe) and detailed analysis.
+  Provide both a binary security assessment and a numerical danger score from 0-100.
+
+  Scoring Guidelines:
+  - 0-20: Very Safe (legitimate services, trusted organizations)
+  - 21-40: Low Risk (residential IPs, minor concerns)
+  - 41-60: Medium Risk (suspicious activity, potential threats)
+  - 61-80: High Risk (known malicious activity, botnet members)
+  - 81-100: Extreme Danger (active attacks, blacklisted, major threats)
 
   IP Address: {{{ipAddress}}}
-  \n  Respond in the following format:
+  
+  Respond in the following format:
   {
    "securityScore": "safe" | "unsafe",
-   "analysisDetails": "Detailed analysis..."
+   "dangerScore": <number 0-100>,
+   "analysisDetails": "Detailed analysis explaining the danger score and specific threats..."
   }`,
 });
 

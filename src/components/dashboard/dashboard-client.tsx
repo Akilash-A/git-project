@@ -12,6 +12,7 @@ import { StatsCard } from "@/components/dashboard/stats-card";
 import { PacketTable } from "@/components/dashboard/packet-table";
 import { AlertsCard } from "@/components/dashboard/alerts-card";
 import { IpDetailsSheet } from "@/components/dashboard/ip-details-sheet";
+import { IpDangerScoreModal } from "@/components/dashboard/ip-danger-score-modal";
 import { NetworkControls } from "@/components/dashboard/network-controls";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ export function DashboardClient() {
   const [attacksDetected, setAttacksDetected] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [selectedIp, setSelectedIp] = useState<string | null>(null);
+  const [dangerScoreIp, setDangerScoreIp] = useState<string | null>(null);
   const [whitelistedIps, setWhitelistedIps] = useState<string[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isMonitoring, setIsMonitoring] = useState(() => {
@@ -252,6 +254,10 @@ export function DashboardClient() {
     setSelectedIp(ip);
   }, []);
 
+  const handleIpDangerScore = useCallback((ip: string) => {
+    setDangerScoreIp(ip);
+  }, []);
+
   const handleInterfaceChange = (interfaceName: string) => {
     setSelectedInterface(interfaceName);
   };
@@ -371,10 +377,11 @@ export function DashboardClient() {
             onPauseToggle={() => setIsPaused(!isPaused)}
             isPaused={isPaused}
             onIpSelect={handleIpSelect}
+            onIpDangerScore={handleIpDangerScore}
           />
         </div>
         <div>
-          <AlertsCard alerts={alerts} onIpSelect={handleIpSelect} />
+          <AlertsCard alerts={alerts} onIpSelect={handleIpSelect} onIpDangerScore={handleIpDangerScore} />
         </div>
       </div>
       <IpDetailsSheet
@@ -383,6 +390,15 @@ export function DashboardClient() {
         onOpenChange={(isOpen) => {
           if (!isOpen) {
             setSelectedIp(null);
+          }
+        }}
+      />
+      <IpDangerScoreModal
+        ipAddress={dangerScoreIp}
+        open={!!dangerScoreIp}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setDangerScoreIp(null);
           }
         }}
       />

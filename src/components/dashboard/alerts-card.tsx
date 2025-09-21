@@ -1,5 +1,5 @@
 
-import { AlertTriangle, Search } from "lucide-react";
+import { AlertTriangle, Search, Shield } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 import type { Alert } from "@/lib/types";
@@ -16,9 +16,10 @@ import { Badge } from "@/components/ui/badge";
 interface AlertsCardProps {
   alerts: Alert[];
   onIpSelect: (ip: string) => void;
+  onIpDangerScore?: (ip: string) => void;
 }
 
-export function AlertsCard({ alerts, onIpSelect }: AlertsCardProps) {
+export function AlertsCard({ alerts, onIpSelect, onIpDangerScore }: AlertsCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -46,6 +47,19 @@ export function AlertsCard({ alerts, onIpSelect }: AlertsCardProps) {
                   <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => onIpSelect(alert.ip)}>
                     {alert.ip} <Search className="ml-2 h-3 w-3" />
                   </Button>
+                  {onIpDangerScore && (
+                    <>
+                      {" • "}
+                      <Button 
+                        variant="link" 
+                        size="sm" 
+                        className="p-0 h-auto text-orange-600 hover:text-orange-800" 
+                        onClick={() => onIpDangerScore(alert.ip)}
+                      >
+                        Danger Score <Shield className="ml-1 h-3 w-3" />
+                      </Button>
+                    </>
+                  )}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {formatDistanceToNow(new Date(alert.timestamp), {
