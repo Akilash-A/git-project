@@ -2,6 +2,7 @@ const { Server } = require('socket.io');
 const { createServer } = require('http');
 const { spawn, exec } = require('child_process');
 const os = require('os');
+const crypto = require('crypto');
 
 class PacketMonitor {
   constructor(port = 3001) {
@@ -61,6 +62,23 @@ class PacketMonitor {
     this.getNetworkInterfaces();
     this.checkCaptureTools();
     this.initializeAttackDetection();
+  }
+
+  // Generate unique IDs using timestamp and random values
+  generateUniqueId() {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substr(2, 9);
+    return `${timestamp}-${random}`;
+  }
+
+  generateUniquePacketId() {
+    // Use counter + timestamp + random for extra uniqueness
+    return `packet-${this.packetIdCounter++}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+  }
+
+  generateUniqueAlertId() {
+    // Use counter + timestamp + random for extra uniqueness
+    return `alert-${this.alertIdCounter++}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
   }
 
   setupSocketHandlers() {
@@ -420,7 +438,7 @@ class PacketMonitor {
         const displayPort = destPort || sourcePort || 0;
         
         const packet = {
-          id: this.packetIdCounter++,
+          id: this.generateUniquePacketId(),
           timestamp: new Date(parseFloat(timestamp) * 1000).toISOString(),
           sourceIp: cleanSrcIp,
           destinationIp: cleanDstIp,
@@ -456,7 +474,7 @@ class PacketMonitor {
         const displayPort = parseInt(dstPort) || parseInt(srcPort) || 0;
         
         const packet = {
-          id: this.packetIdCounter++,
+          id: this.generateUniquePacketId(),
           timestamp: new Date().toISOString(),
           sourceIp: srcIp,
           destinationIp: dstIp,
@@ -785,11 +803,6 @@ class PacketMonitor {
     ];
     
     return privateRanges.some(range => range.test(ip));
-  }
-
-  generateUniqueAlertId() {
-    this.alertIdCounter += 1;
-    return Date.now() * 1000 + this.alertIdCounter;
   }
 
   emitPacket(packet) {

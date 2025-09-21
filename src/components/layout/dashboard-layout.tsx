@@ -64,9 +64,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <Link
-                href="/scoreboard"
+                href="/security-analysis"
                 className={cn("flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:text-foreground md:h-8 md:w-8",
-                  pathname === "/scoreboard" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                  pathname === "/security-analysis" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
                 )}
               >
                 <BarChart3 className="h-5 w-5" />
