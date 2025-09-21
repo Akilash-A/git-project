@@ -36,7 +36,13 @@ export function DashboardClient() {
   const [selectedIp, setSelectedIp] = useState<string | null>(null);
   const [whitelistedIps, setWhitelistedIps] = useState<string[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [isMonitoring, setIsMonitoring] = useState(false);
+  const [isMonitoring, setIsMonitoring] = useState(() => {
+    // Initialize from localStorage to persist monitoring state across navigation
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('netguardian-monitoring') === 'true';
+    }
+    return false;
+  });
   const [networkInterfaces, setNetworkInterfaces] = useState<NetworkInterface[]>([]);
   const [selectedInterface, setSelectedInterface] = useState<string>("");
   const [useMockData, setUseMockData] = useState(false);
@@ -57,6 +63,33 @@ export function DashboardClient() {
     // Initialize packet capture service
     initializePacketCapture();
   }, []);
+
+  // Restore monitoring state after connection is established
+  useEffect(() => {
+    if (isConnected && isMonitoring) {
+      // Restore monitoring if it was previously active
+      try {
+        const options: MonitoringOptions = {
+          interface: selectedInterface || undefined,
+        };
+        packetCaptureService.startMonitoring(options);
+        toast({
+          title: "Monitoring restored",
+          description: "Real-time packet monitoring has been automatically restored.",
+        });
+      } catch (error) {
+        console.error('Failed to restore monitoring state:', error);
+        // Reset state if restoration fails
+        setIsMonitoring(false);
+        localStorage.setItem('netguardian-monitoring', 'false');
+        toast({
+          title: "Monitoring restoration failed",
+          description: "Unable to restore previous monitoring state.",
+          variant: "destructive",
+        });
+      }
+    }
+  }, [isConnected, selectedInterface, toast]);
 
   const initializePacketCapture = async () => {
     try {
@@ -163,12 +196,31 @@ export function DashboardClient() {
     return () => clearInterval(interval);
   }, [isPaused, toast, whitelistedIps, useMockData, isConnected]);
 
+  // Cleanup effect to handle component unmount and page refresh
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Save current monitoring state before page closes
+      if (isMonitoring) {
+        localStorage.setItem('netguardian-monitoring', 'true');
+      } else {
+        localStorage.setItem('netguardian-monitoring', 'false');
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isMonitoring]);
+
   const toggleMonitoring = () => {
     if (isConnected) {
       try {
         if (isMonitoring) {
           packetCaptureService.stopMonitoring();
           setIsMonitoring(false);
+          localStorage.setItem('netguardian-monitoring', 'false');
           toast({
             title: "Monitoring stopped",
             description: "Real-time packet capture has been stopped.",
@@ -179,6 +231,7 @@ export function DashboardClient() {
           };
           packetCaptureService.startMonitoring(options);
           setIsMonitoring(true);
+          localStorage.setItem('netguardian-monitoring', 'true');
           toast({
             title: "Monitoring started",
             description: "Real-time packet capture is now active.",

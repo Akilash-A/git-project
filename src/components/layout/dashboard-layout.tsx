@@ -6,6 +6,7 @@ import {
   Shield,
   Home,
   ListChecks,
+  BarChart3,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 
@@ -59,6 +60,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </Link>
             </TooltipTrigger>
             <TooltipContent side="right">Whitelist</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/scoreboard"
+                className={cn("flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:text-foreground md:h-8 md:w-8",
+                  pathname === "/scoreboard" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                )}
+              >
+                <BarChart3 className="h-5 w-5" />
+                <span className="sr-only">Scoreboard</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">Scoreboard</TooltipContent>
           </Tooltip>
         </nav>
       </aside>
