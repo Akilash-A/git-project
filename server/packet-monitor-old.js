@@ -15,6 +15,7 @@ class PacketMonitor {
     });
     
     this.packetIdCounter = 0;
+    this.alertIdCounter = 0;
     this.isMonitoring = false;
     this.tsharkProcess = null;
     this.tcpdumpProcess = null;
@@ -398,10 +399,15 @@ class PacketMonitor {
     return privateBRanges.some(range => range.test(ip));
   }
 
+  generateUniqueAlertId() {
+    this.alertIdCounter += 1;
+    return Date.now() * 1000 + this.alertIdCounter;
+  }
+
   emitPacket(packet) {
     if (this.connectedClients.size > 0) {
       const alert = packet.attackType ? {
-        id: packet.id,
+        id: this.generateUniqueAlertId(),
         timestamp: packet.timestamp,
         message: `${packet.attackType} detected from ${packet.sourceIp}`,
         ip: packet.sourceIp,
@@ -415,11 +421,6 @@ class PacketMonitor {
 
   getLocalIP() {
     return this.networkInterfaces.length > 0 ? this.networkInterfaces[0].address : '127.0.0.1';
-  }
-    });
-
-    // Also try to monitor network activity using system commands
-    this.captureSystemNetworkActivity(options);
   }
 
   captureSystemNetworkActivity(options) {
@@ -645,7 +646,7 @@ class PacketMonitor {
   emitPacket(packet) {
     if (this.connectedClients.size > 0) {
       const alert = packet.attackType ? {
-        id: packet.id,
+        id: this.generateUniqueAlertId(),
         timestamp: packet.timestamp,
         message: `${packet.attackType} detected from ${packet.sourceIp}`,
         ip: packet.sourceIp,

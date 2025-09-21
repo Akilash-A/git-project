@@ -1,6 +1,12 @@
 import type { Packet, Alert, AttackType } from "./types";
 
 let packetIdCounter = 0;
+let alertIdCounter = 0;
+
+const generateUniqueAlertId = () => {
+  alertIdCounter += 1;
+  return Date.now() * 1000 + alertIdCounter;
+};
 
 const randomIp = () =>
   `${Math.floor(Math.random() * 255) + 1}.${Math.floor(
@@ -33,7 +39,7 @@ export const generateMockPacket = (whitelistedIps: string[]): { packet: Packet; 
   let alert: Alert | null = null;
   if (attackType) {
     alert = {
-      id: packet.id,
+      id: generateUniqueAlertId(),
       timestamp: packet.timestamp,
       message: `${attackType} detected from ${sourceIp}`,
       ip: sourceIp,

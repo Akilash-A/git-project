@@ -15,6 +15,7 @@ class PacketMonitor {
     });
     
     this.packetIdCounter = 0;
+    this.alertIdCounter = 0;
     this.isMonitoring = false;
     this.tsharkProcess = null;
     this.tcpdumpProcess = null;
@@ -48,8 +49,8 @@ class PacketMonitor {
       connectionTracker: new Map(), // Track connections per IP
       portScanTracker: new Map(),   // Track port scanning attempts
       ddosThresholds: {
-        packetsPerSecond: 20,       // DDoS detection threshold (lowered for better detection)
-        connectionsPerIP: 15,       // Connection flood threshold (lowered)
+        packetsPerSecond: 100,      // DDoS detection threshold (increased for normal web traffic)
+        connectionsPerIP: 50,       // Connection flood threshold (increased)
         timeWindow: 10000           // 10 second window
       },
       suspiciousIPs: new Set(),     // Known malicious IPs
@@ -575,7 +576,7 @@ class PacketMonitor {
       if (ddosResult) {
         // Only log attacks from non-trusted IPs
         if (!isFromTrustedLocalIP) {
-          console.log(`🚨 DDoS ATTACK DETECTED! ${sourceIp} → ${destinationIp}:${port}`);
+          // console.log(`🚨 DDoS ATTACK DETECTED! ${sourceIp} → ${destinationIp}:${port}`);
           this.alertHighSeverityAttack('DDoS', sourceIp, destinationIp, port);
         }
         return ddosResult;
@@ -588,7 +589,7 @@ class PacketMonitor {
       if (portScanResult) {
         // Only log attacks from non-trusted IPs
         if (!isFromTrustedLocalIP) {
-          console.log(`🚨 PORT SCAN DETECTED! ${sourceIp} scanning ${destinationIp}`);
+          // console.log(`🚨 PORT SCAN DETECTED! ${sourceIp} scanning ${destinationIp}`);
           this.alertHighSeverityAttack('Port Scan', sourceIp, destinationIp, port);
         }
         return portScanResult;
@@ -637,7 +638,7 @@ class PacketMonitor {
     if (this.attackDetection.suspiciousIPs.has(sourceIp)) {
       // Only log attacks from non-trusted IPs
       if (!isFromTrustedLocalIP) {
-        console.log(`🚨 KNOWN THREAT! Suspicious IP ${sourceIp} → ${destinationIp}:${port}`);
+        // console.log(`🚨 KNOWN THREAT! Suspicious IP ${sourceIp} → ${destinationIp}:${port}`);
       }
       return 'Known Threat';
     }
@@ -667,8 +668,23 @@ class PacketMonitor {
     const timeWindow = this.attackDetection.ddosThresholds.timeWindow;
     const recentConnections = tracker.timestamps.filter(ts => now - ts < timeWindow);
     
+    // Check if this is likely web traffic by examining ports
+    const webTrafficPorts = [80, 443, 8080, 8443];
+    const recentWebConnections = tracker.ports.filter(p => 
+      now - p.timestamp < timeWindow && webTrafficPorts.includes(p.port)
+    );
+    
+    // Use higher thresholds for web traffic (normal browsing can generate many packets)
+    const isWebTraffic = recentWebConnections.length > recentConnections.length * 0.5;
+    const packetsThreshold = isWebTraffic ? 
+      this.attackDetection.ddosThresholds.packetsPerSecond * 3 : 
+      this.attackDetection.ddosThresholds.packetsPerSecond;
+    const connectionsThreshold = isWebTraffic ? 
+      this.attackDetection.ddosThresholds.connectionsPerIP * 2 : 
+      this.attackDetection.ddosThresholds.connectionsPerIP;
+    
     // High volume of packets from single IP to your IP
-    if (recentConnections.length > this.attackDetection.ddosThresholds.packetsPerSecond) {
+    if (recentConnections.length > packetsThreshold) {
       // Don't mark trusted IPs as suspicious
       if (!this.attackDetection.localIPs.has(sourceIp)) {
         this.attackDetection.suspiciousIPs.add(sourceIp);
@@ -677,7 +693,7 @@ class PacketMonitor {
     }
     
     // Connection flood detection
-    if (recentConnections.length > this.attackDetection.ddosThresholds.connectionsPerIP) {
+    if (recentConnections.length > connectionsThreshold) {
       return 'Connection Flood';
     }
     
@@ -701,7 +717,7 @@ class PacketMonitor {
     
     // Multiple ports accessed on your IP in short time
     const uniquePorts = new Set(recentPorts.map(p => p.port));
-    if (uniquePorts.size > 5) { // More than 5 different ports (lowered from 10)
+    if (uniquePorts.size > 15) { // More than 15 different ports (increased for normal web traffic)
       // Don't mark trusted IPs as suspicious
       if (!this.attackDetection.localIPs.has(sourceIp)) {
         this.attackDetection.suspiciousIPs.add(sourceIp);
@@ -771,10 +787,15 @@ class PacketMonitor {
     return privateRanges.some(range => range.test(ip));
   }
 
+  generateUniqueAlertId() {
+    this.alertIdCounter += 1;
+    return Date.now() * 1000 + this.alertIdCounter;
+  }
+
   emitPacket(packet) {
     if (this.connectedClients.size > 0) {
       const alert = packet.attackType ? {
-        id: packet.id,
+        id: this.generateUniqueAlertId(),
         timestamp: packet.timestamp,
         message: `${packet.attackType} detected from ${packet.sourceIp}`,
         ip: packet.sourceIp,

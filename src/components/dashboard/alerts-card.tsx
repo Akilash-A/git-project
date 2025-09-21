@@ -29,8 +29,8 @@ export function AlertsCard({ alerts, onIpSelect }: AlertsCardProps) {
       </CardHeader>
       <CardContent className="grid gap-4">
         {alerts.length > 0 ? (
-          alerts.map((alert) => (
-            <div key={alert.id} className="flex items-start gap-4">
+          alerts.map((alert, index) => (
+            <div key={`${alert.id}-${index}`} className="flex items-start gap-4">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10">
                 <AlertTriangle className="h-4 w-4 text-destructive" />
               </div>

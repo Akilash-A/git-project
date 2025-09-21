@@ -19,6 +19,13 @@ import { Badge } from "@/components/ui/badge";
 const MAX_PACKETS = 50;
 const MAX_ALERTS = 10;
 
+// Unique ID generator for alerts
+let alertIdCounter = 0;
+const generateUniqueAlertId = () => {
+  alertIdCounter += 1;
+  return Date.now() * 1000 + alertIdCounter; // Ensures uniqueness even with rapid calls
+};
+
 export function DashboardClient() {
   const { toast } = useToast();
   const [packets, setPackets] = useState<Packet[]>([]);
@@ -84,7 +91,7 @@ export function DashboardClient() {
       // Set up critical attack alerts
       packetCaptureService.onCriticalAttack((criticalAlert) => {
         setAlerts((prev) => [{
-          id: Date.now(),
+          id: generateUniqueAlertId(),
           timestamp: criticalAlert.timestamp,
           message: criticalAlert.message,
           ip: criticalAlert.sourceIp,
