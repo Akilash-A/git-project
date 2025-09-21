@@ -3,6 +3,7 @@ const { createServer } = require('http');
 const { spawn, exec } = require('child_process');
 const os = require('os');
 const crypto = require('crypto');
+const PacketDatabase = require('./database');
 
 class PacketMonitor {
   constructor(port = 3001) {
@@ -58,6 +59,9 @@ class PacketMonitor {
       localIPs: new Set()           // Your local IPs to protect
     };
     
+    // Initialize database
+    this.database = new PacketDatabase();
+    
     this.setupSocketHandlers();
     this.getNetworkInterfaces();
     this.checkCaptureTools();
@@ -72,13 +76,15 @@ class PacketMonitor {
   }
 
   generateUniquePacketId() {
-    // Use counter + timestamp + random for extra uniqueness
-    return `packet-${this.packetIdCounter++}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    // Use counter + high precision timestamp + random for extra uniqueness
+    const hrTime = process.hrtime.bigint();
+    return `packet-${this.packetIdCounter++}-${hrTime}-${Math.random().toString(36).substr(2, 5)}`;
   }
 
   generateUniqueAlertId() {
-    // Use counter + timestamp + random for extra uniqueness
-    return `alert-${this.alertIdCounter++}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    // Use counter + high precision timestamp + random for extra uniqueness
+    const hrTime = process.hrtime.bigint();
+    return `alert-${this.alertIdCounter++}-${hrTime}-${Math.random().toString(36).substr(2, 5)}`;
   }
 
   setupSocketHandlers() {
@@ -102,6 +108,83 @@ class PacketMonitor {
       socket.on('stop-monitoring', () => {
         console.log('Stopping real packet monitoring');
         this.stopRealPacketCapture();
+      });
+
+      // Database operations
+      socket.on('get-packets', (options = {}) => {
+        const { limit = 100, offset = 0, ip = null } = options;
+        let packets;
+        
+        if (ip) {
+          packets = this.database.getPacketsByIp(ip, limit);
+        } else {
+          packets = this.database.getPackets(limit, offset);
+        }
+        
+        socket.emit('packets-data', packets);
+      });
+
+      socket.on('get-alerts', (options = {}) => {
+        const { limit = 50, offset = 0 } = options;
+        const alerts = this.database.getAlerts(limit, offset);
+        socket.emit('alerts-data', alerts);
+      });
+
+      socket.on('get-whitelist', () => {
+        const whitelist = this.database.getWhitelist();
+        socket.emit('whitelist-data', whitelist);
+      });
+
+      socket.on('add-to-whitelist', (data) => {
+        const { ip, description } = data;
+        const success = this.database.addToWhitelist(ip, description);
+        socket.emit('whitelist-updated', { success, ip, description });
+      });
+
+      socket.on('remove-from-whitelist', (ip) => {
+        const success = this.database.removeFromWhitelist(ip);
+        socket.emit('whitelist-updated', { success, removed: ip });
+      });
+
+      socket.on('get-statistics', () => {
+        const stats = this.database.getStatistics();
+        socket.emit('statistics-data', stats);
+      });
+
+      socket.on('clear-data', (options = {}) => {
+        const { table = 'all', daysOld = null } = options;
+        let result = { success: false, message: '', cleared: 0 };
+        
+        try {
+          if (table === 'all') {
+            this.database.clearAllData();
+            result = { success: true, message: 'All data cleared successfully', cleared: 'all' };
+          } else if (table === 'packets' && daysOld) {
+            const cleared = this.database.deleteOldPackets(daysOld);
+            result = { success: true, message: `Cleared ${cleared} old packets`, cleared };
+          } else if (table === 'alerts' && daysOld) {
+            const cleared = this.database.deleteOldAlerts(daysOld);
+            result = { success: true, message: `Cleared ${cleared} old alerts`, cleared };
+          } else if (['packets', 'alerts', 'security_analysis', 'whitelist'].includes(table)) {
+            const cleared = this.database.clearTable(table);
+            result = { success: true, message: `Cleared ${cleared} records from ${table}`, cleared };
+          }
+        } catch (error) {
+          result = { success: false, message: error.message, cleared: 0 };
+        }
+        
+        socket.emit('data-cleared', result);
+      });
+
+      socket.on('save-security-analysis', (data) => {
+        const { ip, dangerScore, classification, analysisText, source } = data;
+        const id = this.database.saveSecurityAnalysis(ip, dangerScore, classification, analysisText, source);
+        socket.emit('security-analysis-saved', { success: !!id, id });
+      });
+
+      socket.on('get-security-analysis', (ip) => {
+        const analysis = this.database.getSecurityAnalysis(ip);
+        socket.emit('security-analysis-data', { ip, analysis });
       });
       
       socket.on('disconnect', () => {
@@ -806,6 +889,9 @@ class PacketMonitor {
   }
 
   emitPacket(packet) {
+    // Save packet to database
+    this.database.insertPacket(packet);
+    
     if (this.connectedClients.size > 0) {
       const alert = packet.attackType ? {
         id: this.generateUniqueAlertId(),
@@ -814,6 +900,11 @@ class PacketMonitor {
         ip: packet.sourceIp,
         type: packet.attackType
       } : null;
+      
+      // Save alert to database if it exists
+      if (alert) {
+        this.database.insertAlert(alert);
+      }
       
       this.io.emit('new-packet', { packet, alert });
       

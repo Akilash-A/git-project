@@ -29,10 +29,53 @@ const generateUniqueAlertId = () => {
 
 export function DashboardClient() {
   const { toast } = useToast();
-  const [packets, setPackets] = useState<Packet[]>([]);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [totalPackets, setTotalPackets] = useState(0);
-  const [attacksDetected, setAttacksDetected] = useState(0);
+  
+  // Initialize packets and alerts from localStorage
+  const [packets, setPackets] = useState<Packet[]>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('netguardian-packets');
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch (error) {
+          console.error('Failed to parse stored packets:', error);
+        }
+      }
+    }
+    return [];
+  });
+  
+  const [alerts, setAlerts] = useState<Alert[]>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('netguardian-alerts');
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch (error) {
+          console.error('Failed to parse stored alerts:', error);
+        }
+      }
+    }
+    return [];
+  });
+  
+  const packetIdsRef = useRef(new Set<string | number>()); // Track packet IDs to prevent duplicates
+  
+  const [totalPackets, setTotalPackets] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('netguardian-total-packets');
+      return stored ? parseInt(stored) : 0;
+    }
+    return 0;
+  });
+  
+  const [attacksDetected, setAttacksDetected] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('netguardian-attacks-detected');
+      return stored ? parseInt(stored) : 0;
+    }
+    return 0;
+  });
   const [isPaused, setIsPaused] = useState(false);
   const [selectedIp, setSelectedIp] = useState<string | null>(null);
   const [dangerScoreIp, setDangerScoreIp] = useState<string | null>(null);
@@ -66,6 +109,48 @@ export function DashboardClient() {
     initializePacketCapture();
   }, []);
 
+  // Persist packets data to localStorage (debounced to avoid excessive writes)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const timeoutId = setTimeout(() => {
+        localStorage.setItem('netguardian-packets', JSON.stringify(packets));
+      }, 500); // Debounce by 500ms
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [packets]);
+
+  // Persist alerts data to localStorage (debounced)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const timeoutId = setTimeout(() => {
+        localStorage.setItem('netguardian-alerts', JSON.stringify(alerts));
+      }, 500);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [alerts]);
+
+  // Persist counters to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('netguardian-total-packets', totalPackets.toString());
+    }
+  }, [totalPackets]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('netguardian-attacks-detected', attacksDetected.toString());
+    }
+  }, [attacksDetected]);
+
+  // Initialize packet ID tracking from stored packets
+  useEffect(() => {
+    if (packets.length > 0) {
+      packetIdsRef.current = new Set(packets.map(p => p.id));
+    }
+  }, []); // Only run once on mount
+
   // Restore monitoring state after connection is established
   useEffect(() => {
     if (isConnected && isMonitoring) {
@@ -97,6 +182,7 @@ export function DashboardClient() {
     try {
       await packetCaptureService.connect();
       setIsConnected(true);
+      setUseMockData(false); // Ensure mock data is disabled when real connection is established
       
       // Set up packet listener
       packetCaptureService.onPacket(({ packet, alert }) => {
@@ -109,7 +195,24 @@ export function DashboardClient() {
           packet.attackType = null; // Remove attack type for whitelisted IPs
         }
         
-        setPackets((prev) => [packet, ...prev].slice(0, MAX_PACKETS));
+        // Add packet with deduplication check
+        setPackets((prev) => {
+          // Check if packet already exists by ID
+          if (packetIdsRef.current.has(packet.id)) {
+            return prev; // Skip duplicate
+          }
+          
+          // Add new packet ID to tracking set
+          packetIdsRef.current.add(packet.id);
+          
+          const newPackets = [packet, ...prev].slice(0, MAX_PACKETS);
+          
+          // Clean up tracking set - remove IDs that are no longer in the displayed packets
+          const currentIds = new Set(newPackets.map(p => p.id));
+          packetIdsRef.current = currentIds;
+          
+          return newPackets;
+        });
         setTotalPackets((prev) => prev + 1);
 
         if (alert && !isWhitelisted) {
@@ -176,12 +279,30 @@ export function DashboardClient() {
 
   // Fallback to mock data when real monitoring is not available
   useEffect(() => {
-    if (!useMockData || isPaused || isConnected) return;
+    // Only use mock data if explicitly enabled AND not connected AND not paused
+    if (!useMockData || isPaused || isConnected || isMonitoring) return;
 
     const interval = setInterval(() => {
       const { packet, alert } = generateMockPacket(whitelistedIps);
 
-      setPackets((prev) => [packet, ...prev].slice(0, MAX_PACKETS));
+      // Add packet with deduplication check
+      setPackets((prev) => {
+        // Check if packet already exists by ID
+        if (packetIdsRef.current.has(packet.id)) {
+          return prev; // Skip duplicate
+        }
+        
+        // Add new packet ID to tracking set
+        packetIdsRef.current.add(packet.id);
+        
+        const newPackets = [packet, ...prev].slice(0, MAX_PACKETS);
+        
+        // Clean up tracking set - remove IDs that are no longer in the displayed packets
+        const currentIds = new Set(newPackets.map(p => p.id));
+        packetIdsRef.current = currentIds;
+        
+        return newPackets;
+      });
       setTotalPackets((prev) => prev + 1);
 
       if (alert) {
@@ -196,7 +317,7 @@ export function DashboardClient() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isPaused, toast, whitelistedIps, useMockData, isConnected]);
+  }, [isPaused, toast, whitelistedIps, useMockData, isConnected, isMonitoring]);
 
   // Cleanup effect to handle component unmount and page refresh
   useEffect(() => {
@@ -257,6 +378,27 @@ export function DashboardClient() {
   const handleIpDangerScore = useCallback((ip: string) => {
     setDangerScoreIp(ip);
   }, []);
+
+  const clearStoredData = () => {
+    setPackets([]);
+    setAlerts([]);
+    setTotalPackets(0);
+    setAttacksDetected(0);
+    packetIdsRef.current.clear();
+    
+    // Clear from localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('netguardian-packets');
+      localStorage.removeItem('netguardian-alerts');
+      localStorage.removeItem('netguardian-total-packets');
+      localStorage.removeItem('netguardian-attacks-detected');
+    }
+    
+    toast({
+      title: "Data cleared",
+      description: "All packet and alert data has been cleared.",
+    });
+  };
 
   const handleInterfaceChange = (interfaceName: string) => {
     setSelectedInterface(interfaceName);
@@ -337,7 +479,7 @@ export function DashboardClient() {
       </div>
 
       {/* Network Configuration */}
-      <div className="mb-6">
+      <div className="mb-6 space-y-4">
         <NetworkControls
           networkInterfaces={networkInterfaces}
           selectedInterface={selectedInterface}
@@ -346,6 +488,20 @@ export function DashboardClient() {
           isConnected={isConnected}
           isMonitoring={isMonitoring}
         />
+        
+        {/* Data Management Controls */}
+        {(packets.length > 0 || alerts.length > 0) && (
+          <div className="flex gap-2 justify-end">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={clearStoredData}
+              className="text-orange-600 border-orange-200 hover:bg-orange-50"
+            >
+              Clear Data
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-3">
