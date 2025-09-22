@@ -165,15 +165,8 @@ export default function IpIntelligencePage() {
         return allIPs.filter(ip => ip.type === 'Destination' || ip.type === 'Both');
       case 'unique':
       default:
-        // Remove duplicates and show unique IPs only
-        const seen = new Set();
-        return allIPs.filter(ip => {
-          if (seen.has(ip.ip)) {
-            return false;
-          }
-          seen.add(ip.ip);
-          return true;
-        });
+        // Show unique IPs (this is the default behavior since IPs are already unique)
+        return allIPs;
     }
   };
 
