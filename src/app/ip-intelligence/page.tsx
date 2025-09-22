@@ -369,7 +369,7 @@ export default function IpIntelligencePage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={loadTopIPs}>
+            <Button variant="outline" onClick={loadTopIPs} className="border-2 border-border hover:border-primary transition-colors">
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh Data
             </Button>
@@ -408,7 +408,7 @@ export default function IpIntelligencePage() {
                 value={searchIp}
                 onChange={(e) => setSearchIp(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && analyzeIP(searchIp)}
-                className="flex-1"
+                className="flex-1 border-2 border-border/50 hover:border-border focus:border-primary transition-colors rounded-lg"
               />
               <Button 
                 onClick={() => analyzeIP(searchIp)}
@@ -443,6 +443,7 @@ export default function IpIntelligencePage() {
                           setSearchIp(ip);
                           analyzeIP(ip);
                         }}
+                        className="border-2 border-border/50 hover:border-primary transition-colors rounded-lg font-mono"
                       >
                         {ip}
                       </Button>
@@ -464,6 +465,7 @@ export default function IpIntelligencePage() {
                           setSearchIp(item.ip);
                           analyzeIP(item.ip);
                         }}
+                        className="border-2 border-border/50 hover:border-primary transition-colors rounded-lg font-mono"
                       >
                         {item.ip} ({item.count})
                       </Button>
@@ -873,19 +875,28 @@ export default function IpIntelligencePage() {
                   Browse and filter all IP addresses detected in your network traffic
                 </CardDescription>
               </div>
-              <div className="flex items-center gap-2">
-                <Select value={ipFilter} onValueChange={(value: 'unique' | 'all' | 'source' | 'destination') => setIpFilter(value)}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unique">Unique IPs</SelectItem>
-                    <SelectItem value="all">All IPs</SelectItem>
-                    <SelectItem value="source">Source Only</SelectItem>
-                    <SelectItem value="destination">Destination Only</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" onClick={loadAllIPs} disabled={ipViewerLoading}>
+              <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl border shadow-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-muted-foreground">Filter:</span>
+                  <Select value={ipFilter} onValueChange={(value: 'unique' | 'all' | 'source' | 'destination') => setIpFilter(value)}>
+                    <SelectTrigger className="w-40 border-2 border-border/50 hover:border-border transition-colors rounded-lg">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unique">Unique IPs</SelectItem>
+                      <SelectItem value="all">All IPs</SelectItem>
+                      <SelectItem value="source">Source Only</SelectItem>
+                      <SelectItem value="destination">Destination Only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-px h-6 bg-border"></div>
+                <Button 
+                  variant="outline" 
+                  onClick={loadAllIPs} 
+                  disabled={ipViewerLoading}
+                  className="border-2 border-border/50 hover:border-border transition-colors rounded-lg"
+                >
                   <RefreshCw className={`h-4 w-4 mr-2 ${ipViewerLoading ? 'animate-spin' : ''}`} />
                   Refresh
                 </Button>
@@ -900,9 +911,17 @@ export default function IpIntelligencePage() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>Showing {getFilteredIPs().length} IP addresses</span>
-                  <span>Filter: {ipFilter === 'unique' ? 'Unique IPs (Default)' : ipFilter.charAt(0).toUpperCase() + ipFilter.slice(1)} IPs</span>
+                <div className="flex items-center justify-between p-3 bg-muted/20 border rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
+                    <span className="text-sm font-medium">Showing {getFilteredIPs().length} IP addresses</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Active Filter:</span>
+                    <span className="text-sm font-medium bg-primary/10 px-3 py-1.5 rounded-full border shadow-sm">
+                      {ipFilter === 'unique' ? 'Unique IPs' : ipFilter.charAt(0).toUpperCase() + ipFilter.slice(1)} IPs
+                    </span>
+                  </div>
                 </div>
                 
                 <div className="border rounded-lg overflow-hidden">
@@ -955,9 +974,9 @@ export default function IpIntelligencePage() {
                               <td className="p-3">
                                 <Button
                                   size="sm"
-                                  variant="ghost"
+                                  variant="outline"
                                   onClick={() => analyzeIP(ip.ip)}
-                                  className="text-xs"
+                                  className="text-xs border hover:bg-primary/10 hover:text-primary transition-colors"
                                 >
                                   <Search className="h-3 w-3 mr-1" />
                                   Analyze
