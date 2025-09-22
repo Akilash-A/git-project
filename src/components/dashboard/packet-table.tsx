@@ -11,14 +11,6 @@ import {
   CardTitle,
   CardFooter,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,8 +37,8 @@ export function PacketTable({
   onIpDangerScore,
 }: PacketTableProps) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center">
+    <Card className="w-full max-w-full">
+      <CardHeader className="flex flex-row items-center px-6">
         <div className="grid gap-2">
             <CardTitle>Network Monitor</CardTitle>
             <CardDescription>
@@ -87,125 +79,127 @@ export function PacketTable({
             </TooltipProvider>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="max-h-[450px] overflow-auto rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Source IP</TableHead>
-                <TableHead>Destination IP</TableHead>
-                <TableHead>Protocol</TableHead>
-                <TableHead>Port</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead>Direction</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Time</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {packets.length > 0 ? (
-                packets.map((packet) => (
-                  <TableRow key={packet.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => onIpSelect(packet.sourceIp)}>
-                          {packet.sourceIp}
-                          <Search className="ml-1 h-3 w-3" />
-                        </Button>
-                        {onIpDangerScore && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="p-1 h-auto w-auto"
-                                  onClick={() => onIpDangerScore(packet.sourceIp)}
-                                >
-                                  <Activity className="h-3 w-3 text-orange-500" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Check danger score</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+      <CardContent className="px-6 pb-6">
+        <div className="border rounded-md overflow-hidden">
+          <div className="max-h-[450px] overflow-auto">
+            <table className="w-full caption-bottom text-sm">
+              <thead className="sticky top-0 z-10 bg-background">
+                <tr className="border-b transition-colors hover:bg-muted/50">
+                  <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background first:rounded-tl-md">Source IP</th>
+                  <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Destination IP</th>
+                  <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Protocol</th>
+                  <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Port</th>
+                  <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Size</th>
+                  <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Direction</th>
+                  <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Status</th>
+                  <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground sticky top-0 bg-background last:rounded-tr-md">Time</th>
+                </tr>
+              </thead>
+              <tbody className="[&_tr:last-child]:border-0">
+                {packets.length > 0 ? (
+                  packets.map((packet) => (
+                    <tr key={packet.id} className="border-b transition-colors hover:bg-muted/50 last:border-0">
+                      <td className="p-4 align-middle">
+                        <div className="flex items-center gap-1">
+                          <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => onIpSelect(packet.sourceIp)}>
+                            {packet.sourceIp}
+                            <Search className="ml-1 h-3 w-3" />
+                          </Button>
+                          {onIpDangerScore && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="p-1 h-auto w-auto"
+                                    onClick={() => onIpDangerScore(packet.sourceIp)}
+                                  >
+                                    <Activity className="h-3 w-3 text-orange-500" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Check danger score</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4 align-middle">
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono text-sm">{packet.destinationIp}</span>
+                          {onIpDangerScore && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="p-1 h-auto w-auto"
+                                    onClick={() => onIpDangerScore(packet.destinationIp)}
+                                  >
+                                    <Activity className="h-3 w-3 text-orange-500" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Check danger score</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4 align-middle">
+                        <Badge variant="outline">{packet.protocol}</Badge>
+                      </td>
+                      <td className="p-4 align-middle text-muted-foreground">{packet.port}</td>
+                      <td className="p-4 align-middle text-muted-foreground">
+                        {packet.size ? `${packet.size} bytes` : 'N/A'}
+                      </td>
+                      <td className="p-4 align-middle">
+                        {packet.direction && (
+                          <Badge variant={
+                            packet.direction === 'incoming' ? 'destructive' : 
+                            packet.direction === 'outgoing' ? 'default' : 
+                            packet.direction === 'local' ? 'secondary' : 'outline'
+                          }>
+                            {packet.direction === 'incoming' ? 'Incoming' : 
+                             packet.direction === 'outgoing' ? 'Outgoing' : 
+                             packet.direction === 'local' ? 'Local' : 'Passing'}
+                          </Badge>
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <span className="font-mono text-sm">{packet.destinationIp}</span>
-                        {onIpDangerScore && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="p-1 h-auto w-auto"
-                                  onClick={() => onIpDangerScore(packet.destinationIp)}
-                                >
-                                  <Activity className="h-3 w-3 text-orange-500" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Check danger score</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                      </td>
+                      <td className="p-4 align-middle">
+                        {packet.attackType ? (
+                          <Badge variant="destructive">{packet.attackType}</Badge>
+                        ) : (
+                          <Badge variant="secondary">Normal</Badge>
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{packet.protocol}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{packet.port}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {packet.size ? `${packet.size} bytes` : 'N/A'}
-                    </TableCell>
-                    <TableCell>
-                      {packet.direction && (
-                        <Badge variant={
-                          packet.direction === 'incoming' ? 'destructive' : 
-                          packet.direction === 'outgoing' ? 'default' : 
-                          packet.direction === 'local' ? 'secondary' : 'outline'
-                        }>
-                          {packet.direction === 'incoming' ? 'Incoming' : 
-                           packet.direction === 'outgoing' ? 'Outgoing' : 
-                           packet.direction === 'local' ? 'Local' : 'Passing'}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {packet.attackType ? (
-                        <Badge variant="destructive">{packet.attackType}</Badge>
-                      ) : (
-                        <Badge variant="secondary">Normal</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {formatDistanceToNow(new Date(packet.timestamp), {
-                        addSuffix: true,
-                      })}
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={8}
-                    className="h-24 text-center"
-                  >
-                    Monitoring for network packets...
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                      </td>
+                      <td className="p-4 align-middle text-right text-muted-foreground">
+                        {formatDistanceToNow(new Date(packet.timestamp), {
+                          addSuffix: true,
+                        })}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="h-24 text-center p-4 align-middle"
+                    >
+                      Monitoring for network packets...
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </CardContent>
-      <CardFooter>
+      <CardFooter className="px-6">
         <div className="text-xs text-muted-foreground">
             Showing <strong>1-{packets.length}</strong> of <strong>{packets.length}</strong> packets.
         </div>
