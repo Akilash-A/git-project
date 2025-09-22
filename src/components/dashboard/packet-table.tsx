@@ -37,7 +37,7 @@ export function PacketTable({
   onIpDangerScore,
 }: PacketTableProps) {
   return (
-    <Card className="w-full max-w-full max-h-[530px] flex flex-col">
+    <Card className="w-full max-w-full h-[650px] flex flex-col">
       <CardHeader className="flex flex-row items-center px-6 flex-shrink-0">
         <div className="grid gap-2">
             <CardTitle>Network Monitor</CardTitle>
@@ -81,7 +81,7 @@ export function PacketTable({
       </CardHeader>
       <CardContent className="px-6 pb-6">
         <div className="border rounded-md overflow-hidden">
-          <div className="max-h-[400px] overflow-auto">
+          <div className="max-h-[480px] overflow-auto">
             <table className="w-full caption-bottom text-sm">
               <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b transition-colors hover:bg-muted/50">
