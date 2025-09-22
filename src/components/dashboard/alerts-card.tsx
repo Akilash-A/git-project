@@ -28,8 +28,8 @@ export function AlertsCard({ alerts, onIpSelect, onIpDangerScore }: AlertsCardPr
           Critical security events detected on your network.
         </CardDescription>
       </CardHeader>
-      <CardContent className="px-6 pb-6">
-        <div className="max-h-[480px] overflow-y-auto">
+      <CardContent className="px-6 pb-6 flex-1 overflow-hidden">
+        <div className="h-full overflow-y-auto">
           <div className="grid gap-4">
             {alerts.length > 0 ? (
               alerts.map((alert, index) => (
