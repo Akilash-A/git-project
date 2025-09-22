@@ -13,8 +13,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import databaseService from "@/lib/database-service";
 import type { Packet } from "@/lib/types";
 import {
@@ -409,47 +407,47 @@ export default function SettingsPage() {
 
                   {packets.length > 0 && (
                     <>
-                      <ScrollArea className="h-[500px] w-full rounded-md border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Timestamp</TableHead>
-                              <TableHead>Source IP</TableHead>
-                              <TableHead>Destination IP</TableHead>
-                              <TableHead>Protocol</TableHead>
-                              <TableHead>Port</TableHead>
-                              <TableHead>Size</TableHead>
-                              <TableHead>Attack Type</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
+                      <div className="h-[500px] overflow-auto rounded-md border">
+                        <table className="w-full caption-bottom text-sm">
+                          <thead className="sticky top-0 z-10 bg-background">
+                            <tr className="border-b transition-colors hover:bg-muted/50">
+                              <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background first:rounded-tl-md">Timestamp</th>
+                              <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Source IP</th>
+                              <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Destination IP</th>
+                              <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Protocol</th>
+                              <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Port</th>
+                              <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Size</th>
+                              <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background last:rounded-tr-md">Attack Type</th>
+                            </tr>
+                          </thead>
+                          <tbody className="[&_tr:last-child]:border-0">
                             {packets.map((packet) => (
-                              <TableRow key={packet.id}>
-                                <TableCell className="font-mono text-xs">
+                              <tr key={packet.id} className="border-b transition-colors hover:bg-muted/50 last:border-0">
+                                <td className="font-mono text-xs p-4 align-middle">
                                   <div className="flex items-center gap-1">
                                     <Clock className="h-3 w-3" />
                                     {formatTimestamp(packet.timestamp)}
                                   </div>
-                                </TableCell>
-                                <TableCell className="font-mono">
+                                </td>
+                                <td className="font-mono p-4 align-middle">
                                   {packet.sourceIp}
-                                </TableCell>
-                                <TableCell className="font-mono">
+                                </td>
+                                <td className="font-mono p-4 align-middle">
                                   {packet.destinationIp}
-                                </TableCell>
-                                <TableCell>
+                                </td>
+                                <td className="p-4 align-middle">
                                   <Badge variant="outline">{packet.protocol}</Badge>
-                                </TableCell>
-                                <TableCell>{packet.port}</TableCell>
-                                <TableCell>{packet.size ? `${packet.size} bytes` : 'N/A'}</TableCell>
-                                <TableCell>
+                                </td>
+                                <td className="p-4 align-middle">{packet.port}</td>
+                                <td className="p-4 align-middle">{packet.size ? `${packet.size} bytes` : 'N/A'}</td>
+                                <td className="p-4 align-middle">
                                   {getAttackTypeBadge(packet.attackType)}
-                                </TableCell>
-                              </TableRow>
+                                </td>
+                              </tr>
                             ))}
-                          </TableBody>
-                        </Table>
-                      </ScrollArea>
+                          </tbody>
+                        </table>
+                      </div>
 
                       {/* Pagination Controls */}
                       <div className="flex items-center justify-between">

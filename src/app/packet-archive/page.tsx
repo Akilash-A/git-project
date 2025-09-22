@@ -36,15 +36,6 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -715,151 +706,151 @@ export default function PacketArchivePage() {
         </div>
 
         {/* Packets Table */}
-        <Card>
+        <Card className="w-full max-w-full overflow-hidden">
           <CardContent className="p-0">
-            <ScrollArea className="h-[600px] w-full">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">
-                      <Checkbox
-                        checked={selectedPackets.size === packets.length && packets.length > 0}
-                        onCheckedChange={selectAllPackets}
-                      />
-                    </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('timestamp')}
-                    >
-                      <div className="flex items-center">
-                        Timestamp
-                        {getSortIcon('timestamp')}
-                      </div>
-                    </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('sourceIp')}
-                    >
-                      <div className="flex items-center">
-                        Source IP
-                        {getSortIcon('sourceIp')}
-                      </div>
-                    </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('destinationIp')}
-                    >
-                      <div className="flex items-center">
-                        Destination IP
-                        {getSortIcon('destinationIp')}
-                      </div>
-                    </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('protocol')}
-                    >
-                      <div className="flex items-center">
-                        Protocol
-                        {getSortIcon('protocol')}
-                      </div>
-                    </TableHead>
-                    <TableHead>Port</TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('size')}
-                    >
-                      <div className="flex items-center">
-                        Size
-                        {getSortIcon('size')}
-                      </div>
-                    </TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {packets.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8">
-                        {loading ? (
-                          <div className="flex items-center justify-center">
-                            <RefreshCw className="h-4 w-4 animate-spin mr-2" />
-                            Loading packets...
-                          </div>
-                        ) : (
-                          <div className="text-muted-foreground">
-                            No packets found matching your criteria
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    packets.map((packet) => (
-                      <TableRow key={packet.id}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedPackets.has(packet.id)}
-                            onCheckedChange={() => togglePacketSelection(packet.id)}
-                          />
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {formatTimestamp(packet.timestamp)}
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono">
-                          {packet.sourceIp}
-                        </TableCell>
-                        <TableCell className="font-mono">
-                          {packet.destinationIp}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{packet.protocol}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {packet.port}
-                        </TableCell>
-                        <TableCell>{packet.size ? formatBytes(packet.size) : 'N/A'}</TableCell>
-                        <TableCell>
-                          {getAttackBadge(packet.attackType)}
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <Settings className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                              <DropdownMenuItem onClick={() => handleViewPacketDetails(packet)}>
-                                <Eye className="h-4 w-4 mr-2" />
-                                View Details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleExportSinglePacket(packet)}>
-                                <FileText className="h-4 w-4 mr-2" />
-                                Export Packet
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleAddToWhitelist(packet)}>
-                                <Shield className="h-4 w-4 mr-2" />
-                                Add to Whitelist
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                className="text-red-600"
-                                onClick={() => handleDeleteSinglePacket(packet)}
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete Packet
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </ScrollArea>
+            <div className="h-[600px] overflow-auto">
+              <table className="w-full caption-bottom text-sm">
+                <thead className="sticky top-0 z-10 bg-background">
+                  <tr className="border-b transition-colors hover:bg-muted/50">
+                      <th className="w-12 h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background first:rounded-tl-md">
+                        <Checkbox
+                          checked={selectedPackets.size === packets.length && packets.length > 0}
+                          onCheckedChange={selectAllPackets}
+                        />
+                      </th>
+                      <th 
+                        className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleSort('timestamp')}
+                      >
+                        <div className="flex items-center">
+                          Timestamp
+                          {getSortIcon('timestamp')}
+                        </div>
+                      </th>
+                      <th 
+                        className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleSort('sourceIp')}
+                      >
+                        <div className="flex items-center">
+                          Source IP
+                          {getSortIcon('sourceIp')}
+                        </div>
+                      </th>
+                      <th 
+                        className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleSort('destinationIp')}
+                      >
+                        <div className="flex items-center">
+                          Destination IP
+                          {getSortIcon('destinationIp')}
+                        </div>
+                      </th>
+                      <th 
+                        className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleSort('protocol')}
+                      >
+                        <div className="flex items-center">
+                          Protocol
+                          {getSortIcon('protocol')}
+                        </div>
+                      </th>
+                      <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Port</th>
+                      <th 
+                        className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleSort('size')}
+                      >
+                        <div className="flex items-center">
+                          Size
+                          {getSortIcon('size')}
+                        </div>
+                      </th>
+                      <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Status</th>
+                      <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background last:rounded-tr-md">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="[&_tr:last-child]:border-0">
+                    {packets.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="text-center py-8 p-4 align-middle">
+                          {loading ? (
+                            <div className="flex items-center justify-center">
+                              <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                              Loading packets...
+                            </div>
+                          ) : (
+                            <div className="text-muted-foreground">
+                              No packets found matching your criteria
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ) : (
+                      packets.map((packet) => (
+                        <tr key={packet.id} className="border-b transition-colors hover:bg-muted/50 last:border-0">
+                          <td className="p-4 align-middle">
+                            <Checkbox
+                              checked={selectedPackets.has(packet.id)}
+                              onCheckedChange={() => togglePacketSelection(packet.id)}
+                            />
+                          </td>
+                          <td className="font-mono text-xs p-4 align-middle">
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {formatTimestamp(packet.timestamp)}
+                            </div>
+                          </td>
+                          <td className="font-mono p-4 align-middle">
+                            {packet.sourceIp}
+                          </td>
+                          <td className="font-mono p-4 align-middle">
+                            {packet.destinationIp}
+                          </td>
+                          <td className="p-4 align-middle">
+                            <Badge variant="outline">{packet.protocol}</Badge>
+                          </td>
+                          <td className="text-sm p-4 align-middle">
+                            {packet.port}
+                          </td>
+                          <td className="p-4 align-middle">{packet.size ? formatBytes(packet.size) : 'N/A'}</td>
+                          <td className="p-4 align-middle">
+                            {getAttackBadge(packet.attackType)}
+                          </td>
+                          <td className="p-4 align-middle">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <Settings className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent>
+                                <DropdownMenuItem onClick={() => handleViewPacketDetails(packet)}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleExportSinglePacket(packet)}>
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  Export Packet
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleAddToWhitelist(packet)}>
+                                  <Shield className="h-4 w-4 mr-2" />
+                                  Add to Whitelist
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="text-red-600"
+                                  onClick={() => handleDeleteSinglePacket(packet)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete Packet
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
           </CardContent>
         </Card>
 
