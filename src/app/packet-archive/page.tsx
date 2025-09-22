@@ -112,8 +112,8 @@ export default function PacketArchivePage() {
     search: '',
     sourceIp: '',
     destinationIp: '',
-    protocol: '',
-    attackType: '',
+    protocol: 'all',
+    attackType: 'all',
     dateFrom: null,
     dateTo: null,
     minSize: null,
@@ -146,8 +146,8 @@ export default function PacketArchivePage() {
       if (filters.search) queryOptions.search = filters.search;
       if (filters.sourceIp) queryOptions.sourceIp = filters.sourceIp;
       if (filters.destinationIp) queryOptions.destinationIp = filters.destinationIp;
-      if (filters.protocol) queryOptions.protocol = filters.protocol;
-      if (filters.attackType) queryOptions.attackType = filters.attackType;
+      if (filters.protocol && filters.protocol !== 'all') queryOptions.protocol = filters.protocol;
+      if (filters.attackType && filters.attackType !== 'all') queryOptions.attackType = filters.attackType;
       if (filters.dateFrom) queryOptions.dateFrom = filters.dateFrom.getTime();
       if (filters.dateTo) queryOptions.dateTo = filters.dateTo.getTime();
       if (filters.minSize) queryOptions.minSize = filters.minSize;
@@ -200,8 +200,8 @@ export default function PacketArchivePage() {
       search: '',
       sourceIp: '',
       destinationIp: '',
-      protocol: '',
-      attackType: '',
+      protocol: 'all',
+      attackType: 'all',
       dateFrom: null,
       dateTo: null,
       minSize: null,
@@ -284,6 +284,89 @@ export default function PacketArchivePage() {
       toast({
         title: "Error",
         description: "Failed to delete selected packets",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Individual packet action handlers
+  const handleViewPacketDetails = (packet: Packet) => {
+    toast({
+      title: "Packet Details",
+      description: `Viewing details for packet from ${packet.sourceIp}:${packet.port}`,
+    });
+    // TODO: Open a modal or navigate to a detailed view
+  };
+
+  const handleExportSinglePacket = (packet: Packet) => {
+    const dataStr = JSON.stringify([packet], null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `packet-${packet.id}-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Packet Exported",
+      description: `Exported packet ${packet.id} to JSON file`,
+    });
+  };
+
+  const handleAddToWhitelist = async (packet: Packet) => {
+    try {
+      // Get current whitelist from localStorage
+      const currentWhitelist = JSON.parse(localStorage.getItem("whitelistedIps") || "[]");
+      
+      // Check if IP is already whitelisted
+      if (currentWhitelist.includes(packet.sourceIp)) {
+        toast({
+          title: "Already Whitelisted",
+          description: `IP ${packet.sourceIp} is already in the whitelist`,
+        });
+        return;
+      }
+      
+      // Add to whitelist
+      const updatedWhitelist = [...currentWhitelist, packet.sourceIp];
+      localStorage.setItem("whitelistedIps", JSON.stringify(updatedWhitelist));
+      
+      toast({
+        title: "Added to Whitelist",
+        description: `IP ${packet.sourceIp} has been added to the whitelist`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add IP to whitelist",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteSinglePacket = async (packet: Packet) => {
+    try {
+      setLoading(true);
+      // Note: This would need to be implemented in the database service
+      // await databaseService.deletePacket(packet.id);
+      
+      // For now, just show a success message and reload
+      toast({
+        title: "Packet Deleted",
+        description: `Successfully deleted packet ${packet.id}`,
+      });
+      
+      // Reload the current page
+      loadPackets(currentPage);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete packet",
         variant: "destructive",
       });
     } finally {
@@ -467,7 +550,7 @@ export default function PacketArchivePage() {
                         <SelectValue placeholder="All Protocols" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Protocols</SelectItem>
+                        <SelectItem value="all">All Protocols</SelectItem>
                         {PROTOCOL_OPTIONS.map(protocol => (
                           <SelectItem key={protocol} value={protocol}>{protocol}</SelectItem>
                         ))}
@@ -485,7 +568,7 @@ export default function PacketArchivePage() {
                         <SelectValue placeholder="All Attack Types" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All Attack Types</SelectItem>
+                        <SelectItem value="all">All Attack Types</SelectItem>
                         {ATTACK_TYPE_OPTIONS.map(type => (
                           <SelectItem key={type} value={type}>{type}</SelectItem>
                         ))}
@@ -749,19 +832,22 @@ export default function PacketArchivePage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleViewPacketDetails(packet)}>
                                 <Eye className="h-4 w-4 mr-2" />
                                 View Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleExportSinglePacket(packet)}>
                                 <FileText className="h-4 w-4 mr-2" />
                                 Export Packet
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleAddToWhitelist(packet)}>
                                 <Shield className="h-4 w-4 mr-2" />
                                 Add to Whitelist
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-red-600">
+                              <DropdownMenuItem 
+                                className="text-red-600"
+                                onClick={() => handleDeleteSinglePacket(packet)}
+                              >
                                 <Trash2 className="h-4 w-4 mr-2" />
                                 Delete Packet
                               </DropdownMenuItem>

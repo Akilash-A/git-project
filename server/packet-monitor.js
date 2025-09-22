@@ -864,6 +864,9 @@ class PacketMonitor {
   }
 
   alertHighSeverityAttack(attackType, sourceIp, destinationIp, port) {
+    // Only send critical alerts if monitoring is active
+    if (!this.isMonitoring) return;
+    
     // Send immediate high-priority alert
     this.io.emit('critical-attack', {
       severity: 'CRITICAL',
@@ -889,6 +892,9 @@ class PacketMonitor {
   }
 
   emitPacket(packet) {
+    // Only emit packets if monitoring is active
+    if (!this.isMonitoring) return;
+    
     // Save packet to database
     this.database.insertPacket(packet);
     

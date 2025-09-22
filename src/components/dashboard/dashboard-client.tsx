@@ -54,12 +54,17 @@ export function DashboardClient() {
   const [selectedInterface, setSelectedInterface] = useState<string>("");
   const [useMockData, setUseMockData] = useState(false);
   
-  // Use useRef to track isPaused state for the packet listener closure
+  // Use useRef to track isPaused and isMonitoring state for the packet listener closure
   const isPausedRef = useRef(isPaused);
+  const isMonitoringRef = useRef(isMonitoring);
   
   useEffect(() => {
     isPausedRef.current = isPaused;
   }, [isPaused]);
+
+  useEffect(() => {
+    isMonitoringRef.current = isMonitoring;
+  }, [isMonitoring]);
 
   useEffect(() => {
     const storedIps = localStorage.getItem("whitelistedIps");
@@ -177,8 +182,8 @@ export function DashboardClient() {
       
       // Set up packet listener
       packetCaptureService.onPacket(({ packet, alert }) => {
-        // Use ref to get current paused state instead of stale closure value
-        if (isPausedRef.current) return;
+        // Use ref to get current paused and monitoring state instead of stale closure values
+        if (isPausedRef.current || !isMonitoringRef.current) return;
         
         // Check if IP is whitelisted
         const isWhitelisted = whitelistedIps.includes(packet.sourceIp);
@@ -219,6 +224,9 @@ export function DashboardClient() {
       
       // Set up critical attack alerts
       packetCaptureService.onCriticalAttack((criticalAlert) => {
+        // Only process critical alerts if monitoring is active and not paused
+        if (isPausedRef.current || !isMonitoringRef.current) return;
+        
         setAlerts((prev) => [{
           id: generateUniqueAlertId(),
           timestamp: criticalAlert.timestamp,
