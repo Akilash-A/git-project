@@ -21,15 +21,15 @@ interface AlertsCardProps {
 
 export function AlertsCard({ alerts, onIpSelect, onIpDangerScore }: AlertsCardProps) {
   return (
-    <Card>
-      <CardHeader>
+    <Card className="flex flex-col max-h-[530px]">
+      <CardHeader className="flex-shrink-0">
         <CardTitle>Recent Alerts</CardTitle>
         <CardDescription>
           Critical security events detected on your network.
         </CardDescription>
       </CardHeader>
-      <CardContent className="p-0">
-        <div className="max-h-80 overflow-y-auto px-6 pb-6">
+      <CardContent className="px-6 pb-6">
+        <div className="max-h-[400px] overflow-y-auto">
           <div className="grid gap-4">
             {alerts.length > 0 ? (
               alerts.map((alert, index) => (
@@ -77,7 +77,7 @@ export function AlertsCard({ alerts, onIpSelect, onIpDangerScore }: AlertsCardPr
               <p className="text-sm text-muted-foreground">No alerts to show.</p>
             </div>
           )}
-          </div>
+        </div>
         </div>
       </CardContent>
     </Card>
