@@ -9,6 +9,7 @@ import {
   BarChart3,
   Settings,
   Archive,
+  Brain,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 
@@ -76,6 +77,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </Link>
             </TooltipTrigger>
             <TooltipContent side="right">Packet Archive</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/ip-intelligence"
+                className={cn("flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:text-foreground md:h-8 md:w-8",
+                  pathname === "/ip-intelligence" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                )}
+              >
+                <Brain className="h-5 w-5" />
+                <span className="sr-only">IP Intelligence</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">IP Intelligence</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
