@@ -197,10 +197,10 @@ export function PacketTable({
               </tbody>
             </table>
           </div>
-        </div>
-        <div className="px-2 py-3 border-t">
-          <div className="text-xs text-muted-foreground">
-            Showing <strong>1-{packets.length}</strong> of <strong>{packets.length}</strong> packets.
+          <div className="px-4 py-2 border-t bg-muted/20">
+            <div className="text-xs text-muted-foreground">
+              Showing <strong>1-{packets.length}</strong> of <strong>{packets.length}</strong> packets.
+            </div>
           </div>
         </div>
       </CardContent>
