@@ -856,9 +856,6 @@ export default function PacketArchivePage() {
 
         {/* Pagination */}
         <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount.toLocaleString()} packets
-          </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -879,6 +876,9 @@ export default function PacketArchivePage() {
             >
               Next
             </Button>
+          </div>
+          <div className="text-sm text-muted-foreground">
+            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount.toLocaleString()} packets
           </div>
         </div>
       </div>

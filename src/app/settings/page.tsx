@@ -407,12 +407,13 @@ export default function SettingsPage() {
 
                   {packets.length > 0 && (
                     <>
-                      <div className="h-[500px] overflow-auto rounded-md border">
-                        <table className="w-full caption-bottom text-sm">
-                          <thead className="sticky top-0 z-10 bg-background">
-                            <tr className="border-b transition-colors hover:bg-muted/50">
-                              <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background first:rounded-tl-md">Timestamp</th>
-                              <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Source IP</th>
+                      <div className="rounded-md border overflow-hidden">
+                        <div className="h-[500px] overflow-auto">
+                          <table className="w-full caption-bottom text-sm">
+                            <thead className="sticky top-0 z-10 bg-background">
+                              <tr className="border-b transition-colors hover:bg-muted/50">
+                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background first:rounded-tl-md">Timestamp</th>
+                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Source IP</th>
                               <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Destination IP</th>
                               <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Protocol</th>
                               <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground sticky top-0 bg-background">Port</th>
@@ -447,6 +448,7 @@ export default function SettingsPage() {
                             ))}
                           </tbody>
                         </table>
+                        </div>
                       </div>
 
                       {/* Pagination Controls */}
