@@ -46,7 +46,7 @@ export function AlertsCard({ alerts, onIpSelect, onIpDangerScore }: AlertsCardPr
                 </div>
                 <p className="text-sm text-muted-foreground">
                   From IP:{" "}
-                  <Button variant="link" size="sm" className="p-0 h-auto" onClick={() => onIpSelect(alert.ip)}>
+                  <Button variant="link" size="sm" className="p-0 h-auto border border-border/50 hover:border-primary transition-colors px-1 py-0.5 rounded" onClick={() => onIpSelect(alert.ip)}>
                     {alert.ip} <Search className="ml-2 h-3 w-3" />
                   </Button>
                   {onIpDangerScore && (
@@ -55,7 +55,7 @@ export function AlertsCard({ alerts, onIpSelect, onIpDangerScore }: AlertsCardPr
                       <Button 
                         variant="link" 
                         size="sm" 
-                        className="p-0 h-auto text-orange-600 hover:text-orange-800" 
+                        className="p-0 h-auto text-orange-600 hover:text-orange-800 border border-border/50 hover:border-orange-500 transition-colors px-1 py-0.5 rounded" 
                         onClick={() => onIpDangerScore(alert.ip)}
                       >
                         Danger Score <Shield className="ml-1 h-3 w-3" />
