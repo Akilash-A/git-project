@@ -476,6 +476,7 @@ export function DashboardClient() {
                 onClick={toggleMonitoring}
                 variant={isMonitoring ? "destructive" : "default"}
                 size="sm"
+                className="border-2 border-border/50 hover:border-primary transition-colors"
               >
                 {isMonitoring ? "Stop Monitoring" : "Start Monitoring"}
               </Button>
@@ -483,6 +484,7 @@ export function DashboardClient() {
                 onClick={() => setIsPaused(!isPaused)}
                 variant="outline"
                 size="sm"
+                className="border-2 border-border/50 hover:border-primary transition-colors"
               >
                 {isPaused ? "Resume" : "Pause"}
               </Button>

@@ -408,7 +408,7 @@ export default function IpIntelligencePage() {
                 value={searchIp}
                 onChange={(e) => setSearchIp(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && analyzeIP(searchIp)}
-                className="flex-1 border-2 border-border/50 hover:border-border focus:border-primary transition-colors rounded-lg"
+                className="flex-1 border-0 ring-1 ring-border/50 hover:ring-border focus:ring-2 focus:ring-primary focus:border-0 transition-all rounded-lg bg-background"
               />
               <Button 
                 onClick={() => analyzeIP(searchIp)}
@@ -443,7 +443,7 @@ export default function IpIntelligencePage() {
                           setSearchIp(ip);
                           analyzeIP(ip);
                         }}
-                        className="border-2 border-border/50 hover:border-primary transition-colors rounded-lg font-mono"
+                        className="border-2 border-border/50 hover:border-primary transition-colors rounded-lg font-mono font-bold"
                       >
                         {ip}
                       </Button>
@@ -465,7 +465,7 @@ export default function IpIntelligencePage() {
                           setSearchIp(item.ip);
                           analyzeIP(item.ip);
                         }}
-                        className="border-2 border-border/50 hover:border-primary transition-colors rounded-lg font-mono"
+                        className="border-2 border-border/50 hover:border-primary transition-colors rounded-lg font-mono font-bold"
                       >
                         {item.ip} ({item.count})
                       </Button>
