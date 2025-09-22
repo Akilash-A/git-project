@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Trash2, Database, Settings as SettingsIcon, AlertTriangle, Shield, BarChart3, Download, Upload } from "lucide-react";
+import { Trash2, Database, Settings as SettingsIcon, AlertTriangle, Shield, BarChart3, Download, Upload, Eye, Calendar, Clock } from "lucide-react";
 
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,10 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import databaseService from "@/lib/database-service";
+import type { Packet } from "@/lib/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,6 +42,13 @@ export default function SettingsPage() {
   const [stats, setStats] = useState<DatabaseStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  
+  // Packets viewing state
+  const [packets, setPackets] = useState<Packet[]>([]);
+  const [packetsLoading, setPacketsLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [packetsPerPage] = useState(50);
+  const [totalPacketsCount, setTotalPacketsCount] = useState(0);
   
   // Settings state
   const [autoCleanup, setAutoCleanup] = useState(true);
@@ -123,6 +133,44 @@ export default function SettingsPage() {
     return new Intl.NumberFormat().format(num);
   };
 
+  const loadPackets = async (page: number = 1) => {
+    setPacketsLoading(true);
+    try {
+      const offset = (page - 1) * packetsPerPage;
+      const packets = await databaseService.getPackets({ 
+        limit: packetsPerPage, 
+        offset 
+      });
+      
+      setPackets(packets);
+      setCurrentPage(page);
+      
+      // Update total count from stats
+      if (stats) {
+        setTotalPacketsCount(stats.totalPackets);
+      }
+    } catch (error) {
+      console.error('Failed to load packets:', error);
+      setMessage({ 
+        type: 'error', 
+        text: 'Failed to load packets from database' 
+      });
+    } finally {
+      setPacketsLoading(false);
+    }
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    return new Date(timestamp).toLocaleString();
+  };
+
+  const getAttackTypeBadge = (attackType: string | null) => {
+    if (!attackType) return null;
+    
+    const badgeVariant = attackType.toLowerCase().includes('critical') ? 'destructive' : 'secondary';
+    return <Badge variant={badgeVariant}>{attackType}</Badge>;
+  };
+
   return (
     <DashboardLayout>
       <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
@@ -140,8 +188,9 @@ export default function SettingsPage() {
         )}
 
         <Tabs defaultValue="database" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="database">Database Management</TabsTrigger>
+            <TabsTrigger value="packets">View Packets</TabsTrigger>
             <TabsTrigger value="cleanup">Auto Cleanup</TabsTrigger>
             <TabsTrigger value="export">Import/Export</TabsTrigger>
           </TabsList>
@@ -320,6 +369,129 @@ export default function SettingsPage() {
                       </AlertDialogContent>
                     </AlertDialog>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="packets" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Eye className="h-5 w-5" />
+                  View All Packets
+                </CardTitle>
+                <CardDescription>
+                  Browse all packets stored in the database with pagination
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        Total Packets: {formatNumber(totalPacketsCount)}
+                      </span>
+                      {stats && (
+                        <Badge variant="outline">
+                          Showing {Math.min(packetsPerPage, packets.length)} of {formatNumber(stats.totalPackets)}
+                        </Badge>
+                      )}
+                    </div>
+                    <Button 
+                      onClick={() => loadPackets(1)} 
+                      disabled={packetsLoading}
+                      className="border-2 dark:border-gray-600"
+                    >
+                      {packetsLoading ? "Loading..." : "Load Packets"}
+                    </Button>
+                  </div>
+
+                  {packets.length > 0 && (
+                    <>
+                      <ScrollArea className="h-[500px] w-full rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Timestamp</TableHead>
+                              <TableHead>Source IP</TableHead>
+                              <TableHead>Destination IP</TableHead>
+                              <TableHead>Protocol</TableHead>
+                              <TableHead>Port</TableHead>
+                              <TableHead>Size</TableHead>
+                              <TableHead>Attack Type</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {packets.map((packet) => (
+                              <TableRow key={packet.id}>
+                                <TableCell className="font-mono text-xs">
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {formatTimestamp(packet.timestamp)}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="font-mono">
+                                  {packet.sourceIp}
+                                </TableCell>
+                                <TableCell className="font-mono">
+                                  {packet.destinationIp}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline">{packet.protocol}</Badge>
+                                </TableCell>
+                                <TableCell>{packet.port}</TableCell>
+                                <TableCell>{packet.size ? `${packet.size} bytes` : 'N/A'}</TableCell>
+                                <TableCell>
+                                  {getAttackTypeBadge(packet.attackType)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </ScrollArea>
+
+                      {/* Pagination Controls */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => loadPackets(currentPage - 1)}
+                            disabled={currentPage <= 1 || packetsLoading}
+                            className="border-2 dark:border-gray-600 dark:hover:border-gray-500"
+                          >
+                            Previous
+                          </Button>
+                          <span className="text-sm text-muted-foreground">
+                            Page {currentPage} of {Math.ceil(totalPacketsCount / packetsPerPage)}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => loadPackets(currentPage + 1)}
+                            disabled={currentPage >= Math.ceil(totalPacketsCount / packetsPerPage) || packetsLoading}
+                            className="border-2 dark:border-gray-600 dark:hover:border-gray-500"
+                          >
+                            Next
+                          </Button>
+                        </div>
+                        
+                        <div className="text-sm text-muted-foreground">
+                          Showing {(currentPage - 1) * packetsPerPage + 1}-{Math.min(currentPage * packetsPerPage, totalPacketsCount)} 
+                          of {formatNumber(totalPacketsCount)} packets
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {packets.length === 0 && !packetsLoading && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No packets found in database</p>
+                      <p className="text-sm">Click "Load Packets" to fetch data from the database</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
