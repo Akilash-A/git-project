@@ -423,6 +423,7 @@ export default function PacketArchivePage() {
               <Switch 
                 checked={autoRefresh} 
                 onCheckedChange={setAutoRefresh}
+                className="border-[hsl(267.1,37.5%,22%)]"
               />
               {autoRefresh && (
                 <Select value={refreshInterval.toString()} onValueChange={(v) => setRefreshInterval(parseInt(v))}>
