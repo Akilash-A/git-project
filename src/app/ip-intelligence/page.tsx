@@ -550,14 +550,27 @@ export default function IpIntelligencePage() {
                   {analysis.dangerScore.securityScore === 'unsafe' || analysis.dangerScore.dangerScore > 20 ? (
                     <>
                       {/* Show detailed analysis for threats */}
-                      <div className="border-l-4 border-red-500 bg-red-50 p-4 rounded-r-lg">
-                        <div className="flex items-center gap-2 mb-2">
-                          <AlertTriangle className="h-5 w-5 text-red-600" />
-                          <span className="font-semibold text-red-800">Known Threat Detected</span>
+                      <div className="relative overflow-hidden rounded-lg border border-red-200 bg-gradient-to-r from-red-50 to-red-100/50 p-6 shadow-sm">
+                        <div className="absolute top-0 left-0 h-full w-1 bg-red-500"></div>
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 ring-2 ring-red-200">
+                              <AlertTriangle className="h-5 w-5 text-red-600" />
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="text-lg font-semibold text-red-900">Known Threat Detected</h3>
+                              <Badge variant="destructive" className="animate-pulse">
+                                HIGH RISK
+                              </Badge>
+                            </div>
+                            <p className="text-red-700 leading-relaxed">
+                              This IP address has been identified as a security threat and requires immediate attention. 
+                              Please review the detailed analysis below and consider implementing appropriate security measures.
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-sm text-red-700">
-                          This IP address has been identified as a security threat and requires immediate attention.
-                        </p>
                       </div>
                       
                       <div className="flex items-center justify-between">
@@ -599,14 +612,27 @@ export default function IpIntelligencePage() {
                   ) : (
                     <>
                       {/* Show safe status for non-threats */}
-                      <div className="border-l-4 border-green-500 bg-green-50 p-4 rounded-r-lg">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Shield className="h-5 w-5 text-green-600" />
-                          <span className="font-semibold text-green-800">No Known Threats</span>
+                      <div className="relative overflow-hidden rounded-lg border border-green-200 bg-gradient-to-r from-green-50 to-green-100/50 p-6 shadow-sm">
+                        <div className="absolute top-0 left-0 h-full w-1 bg-green-500"></div>
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 ring-2 ring-green-200">
+                              <Shield className="h-5 w-5 text-green-600" />
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="text-lg font-semibold text-green-900">No Known Threats</h3>
+                              <Badge variant="outline" className="border-green-300 text-green-700 bg-green-50">
+                                SAFE
+                              </Badge>
+                            </div>
+                            <p className="text-green-700 leading-relaxed">
+                              This IP address appears to be legitimate and safe with no known security threats detected. 
+                              Continue monitoring for any changes in behavior or reputation.
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-sm text-green-700">
-                          This IP address appears to be safe with no known security threats detected.
-                        </p>
                       </div>
                       
                       <div className="flex items-center justify-between">
