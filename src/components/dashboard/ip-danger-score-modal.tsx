@@ -77,7 +77,7 @@ export function IpDangerScoreModal({ ipAddress, open, onOpenChange }: IpDangerSc
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Activity className="h-5 w-5" />
@@ -85,7 +85,7 @@ export function IpDangerScoreModal({ ipAddress, open, onOpenChange }: IpDangerSc
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-6 max-h-[calc(90vh-120px)] overflow-y-auto pr-1">
           {/* IP Address Header */}
           <div className="text-center">
             <div className="font-mono text-lg font-semibold mb-2">{ipAddress}</div>
