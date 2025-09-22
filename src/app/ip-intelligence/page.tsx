@@ -27,6 +27,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import databaseService from "@/lib/database-service";
@@ -61,11 +63,18 @@ export default function IpIntelligencePage() {
   const [analysis, setAnalysis] = useState<IpAnalysis | null>(null);
   const [topIPs, setTopIPs] = useState<{ ip: string; count: number }[]>([]);
   const [recentAnalyses, setRecentAnalyses] = useState<string[]>([]);
+  
+  // New state for IP viewer
+  const [allIPs, setAllIPs] = useState<{ ip: string; count: number; type: string; protocols: string[] }[]>([]);
+  const [ipFilter, setIpFilter] = useState<'unique' | 'all' | 'source' | 'destination'>('unique');
+  const [ipViewerLoading, setIpViewerLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'analysis' | 'viewer'>('analysis');
 
   // Load top IPs on component mount
   useEffect(() => {
     loadTopIPs();
     loadRecentAnalyses();
+    loadAllIPs();
   }, []);
 
   const loadTopIPs = async () => {
@@ -94,6 +103,77 @@ export default function IpIntelligencePage() {
     const recent = localStorage.getItem('recentIpAnalyses');
     if (recent) {
       setRecentAnalyses(JSON.parse(recent));
+    }
+  };
+
+  const loadAllIPs = async () => {
+    setIpViewerLoading(true);
+    try {
+      // Get ALL packets without limit to get complete IP data
+      const packets: Packet[] = await databaseService.getPackets({ limit: 999999 });
+      const ipData: Record<string, { count: number; sourceCount: number; destCount: number; protocols: Set<string> }> = {};
+      
+      packets.forEach((packet: Packet) => {
+        // Track source IPs
+        if (!ipData[packet.sourceIp]) {
+          ipData[packet.sourceIp] = { count: 0, sourceCount: 0, destCount: 0, protocols: new Set() };
+        }
+        ipData[packet.sourceIp].count++;
+        ipData[packet.sourceIp].sourceCount++;
+        ipData[packet.sourceIp].protocols.add(packet.protocol);
+
+        // Track destination IPs
+        if (!ipData[packet.destinationIp]) {
+          ipData[packet.destinationIp] = { count: 0, sourceCount: 0, destCount: 0, protocols: new Set() };
+        }
+        ipData[packet.destinationIp].count++;
+        ipData[packet.destinationIp].destCount++;
+        ipData[packet.destinationIp].protocols.add(packet.protocol);
+      });
+
+      // Convert to array with type information
+      const ipList = Object.entries(ipData).map(([ip, data]) => ({
+        ip,
+        count: data.count,
+        type: data.sourceCount > 0 && data.destCount > 0 ? 'Both' : 
+              data.sourceCount > 0 ? 'Source' : 'Destination',
+        protocols: Array.from(data.protocols)
+      }));
+
+      // Sort by count descending
+      ipList.sort((a, b) => b.count - a.count);
+      setAllIPs(ipList);
+    } catch (error) {
+      console.error('Error loading IPs:', error);
+      toast({
+        title: "Error Loading IPs",
+        description: "Failed to load IP addresses from database",
+        variant: "destructive",
+      });
+    } finally {
+      setIpViewerLoading(false);
+    }
+  };
+
+  const getFilteredIPs = () => {
+    switch (ipFilter) {
+      case 'all':
+        return allIPs;
+      case 'source':
+        return allIPs.filter(ip => ip.type === 'Source' || ip.type === 'Both');
+      case 'destination':
+        return allIPs.filter(ip => ip.type === 'Destination' || ip.type === 'Both');
+      case 'unique':
+      default:
+        // Remove duplicates and show unique IPs only
+        const seen = new Set();
+        return allIPs.filter(ip => {
+          if (seen.has(ip.ip)) {
+            return false;
+          }
+          seen.add(ip.ip);
+          return true;
+        });
     }
   };
 
@@ -161,6 +241,7 @@ export default function IpIntelligencePage() {
 
       setAnalysis(analysis);
       saveToRecentAnalyses(ipAddress);
+      setActiveTab('analysis'); // Switch to analysis tab when analyzing an IP
       
       if (stats.totalPackets === 0) {
         toast({
@@ -302,8 +383,22 @@ export default function IpIntelligencePage() {
           </div>
         </div>
 
-        {/* Search Section */}
-        <Card>
+        {/* Tabs for different sections */}
+        <Tabs value={activeTab} onValueChange={(value: 'analysis' | 'viewer') => setActiveTab(value)} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="analysis" className="flex items-center gap-2">
+              <Search className="h-4 w-4" />
+              IP Address Analysis
+            </TabsTrigger>
+            <TabsTrigger value="viewer" className="flex items-center gap-2">
+              <Globe className="h-4 w-4" />
+              View All IPs
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="analysis" className="space-y-4">
+            {/* Search Section */}
+            <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Search className="h-5 w-5" />
@@ -687,6 +782,130 @@ export default function IpIntelligencePage() {
             </CardContent>
           </Card>
         )}
+          </TabsContent>
+
+          <TabsContent value="viewer" className="space-y-4">
+            {/* View All IPs Section */}
+            <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="h-5 w-5" />
+                  View All IPs
+                </CardTitle>
+                <CardDescription>
+                  Browse and filter all IP addresses detected in your network traffic
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Select value={ipFilter} onValueChange={(value: 'unique' | 'all' | 'source' | 'destination') => setIpFilter(value)}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unique">Unique IPs</SelectItem>
+                    <SelectItem value="all">All IPs</SelectItem>
+                    <SelectItem value="source">Source Only</SelectItem>
+                    <SelectItem value="destination">Destination Only</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" onClick={loadAllIPs} disabled={ipViewerLoading}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${ipViewerLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {ipViewerLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+                <span>Loading IP addresses...</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Showing {getFilteredIPs().length} IP addresses</span>
+                  <span>Filter: {ipFilter === 'unique' ? 'Unique IPs (Default)' : ipFilter.charAt(0).toUpperCase() + ipFilter.slice(1)} IPs</span>
+                </div>
+                
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="max-h-96 overflow-y-auto">
+                    <table className="w-full">
+                      <thead className="sticky top-0 bg-muted/50 border-b">
+                        <tr>
+                          <th className="text-left p-3 font-medium">IP Address</th>
+                          <th className="text-left p-3 font-medium">Packet Count</th>
+                          <th className="text-left p-3 font-medium">Type</th>
+                          <th className="text-left p-3 font-medium">Protocols</th>
+                          <th className="text-left p-3 font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {getFilteredIPs().length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="text-center p-8 text-muted-foreground">
+                              No IP addresses found
+                            </td>
+                          </tr>
+                        ) : (
+                          getFilteredIPs().slice(0, 100).map((ip, index) => (
+                            <tr key={`${ip.ip}-${index}`} className="border-b last:border-b-0 hover:bg-muted/25">
+                              <td className="p-3 font-mono text-sm">{ip.ip}</td>
+                              <td className="p-3">
+                                <Badge variant="secondary">{ip.count}</Badge>
+                              </td>
+                              <td className="p-3">
+                                <Badge 
+                                  variant={ip.type === 'Both' ? 'default' : ip.type === 'Source' ? 'outline' : 'secondary'}
+                                >
+                                  {ip.type}
+                                </Badge>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex flex-wrap gap-1">
+                                  {ip.protocols.slice(0, 3).map(protocol => (
+                                    <Badge key={protocol} variant="outline" className="text-xs">
+                                      {protocol}
+                                    </Badge>
+                                  ))}
+                                  {ip.protocols.length > 3 && (
+                                    <Badge variant="outline" className="text-xs">
+                                      +{ip.protocols.length - 3}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => analyzeIP(ip.ip)}
+                                  className="text-xs"
+                                >
+                                  <Search className="h-3 w-3 mr-1" />
+                                  Analyze
+                                </Button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {getFilteredIPs().length > 100 && (
+                    <div className="border-t p-3 text-center text-sm text-muted-foreground">
+                      Showing first 100 results. Use filters to narrow down the results.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );
