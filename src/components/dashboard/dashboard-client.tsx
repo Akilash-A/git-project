@@ -401,27 +401,6 @@ export function DashboardClient() {
     setDangerScoreIp(ip);
   }, []);
 
-  const clearStoredData = () => {
-    setPackets([]);
-    setAlerts([]);
-    setTotalPackets(0);
-    setAttacksDetected(0);
-    packetIdsRef.current.clear();
-    
-    // Clear from localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('netguardian-packets');
-      localStorage.removeItem('netguardian-alerts');
-      localStorage.removeItem('netguardian-total-packets');
-      localStorage.removeItem('netguardian-attacks-detected');
-    }
-    
-    toast({
-      title: "Data cleared",
-      description: "All packet and alert data has been cleared.",
-    });
-  };
-
   const handleInterfaceChange = (interfaceName: string) => {
     setSelectedInterface(interfaceName);
   };
@@ -503,6 +482,7 @@ export function DashboardClient() {
                 onClick={() => setIsPaused(!isPaused)}
                 variant="outline"
                 size="sm"
+                className="border-2 border-border/50 hover:border-primary transition-colors"
               >
                 {isPaused ? "Resume Demo" : "Pause Demo"}
               </Button>
@@ -523,19 +503,6 @@ export function DashboardClient() {
           isMonitoring={isMonitoring}
         />
         
-        {/* Data Management Controls */}
-        {isHydrated && (packets.length > 0 || alerts.length > 0) && (
-          <div className="flex gap-2 justify-end">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={clearStoredData}
-              className="text-orange-600 border-orange-200 hover:bg-orange-50"
-            >
-              Clear Data ({packets.length + alerts.length} items)
-            </Button>
-          </div>
-        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-3">

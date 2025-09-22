@@ -165,7 +165,7 @@ export function NetworkControls({
           </div>
           <Dialog open={isConfigOpen} onOpenChange={setIsConfigOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="border-2 border-border/50 hover:border-primary transition-colors">
                 <Settings className="h-4 w-4 mr-2" />
                 Configure
               </Button>
@@ -220,10 +220,10 @@ export function NetworkControls({
                 </div>
 
                 <div className="flex gap-2">
-                  <Button onClick={handleApplyFilters} className="flex-1">
+                  <Button onClick={handleApplyFilters} className="flex-1 border-2 border-border/50 hover:border-primary transition-colors">
                     Apply Filters
                   </Button>
-                  <Button onClick={clearFilters} variant="outline">
+                  <Button onClick={clearFilters} variant="outline" className="border-2 border-border/50 hover:border-primary transition-colors">
                     Clear
                   </Button>
                 </div>

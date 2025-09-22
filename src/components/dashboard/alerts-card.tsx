@@ -28,9 +28,11 @@ export function AlertsCard({ alerts, onIpSelect, onIpDangerScore }: AlertsCardPr
           Critical security events detected on your network.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        {alerts.length > 0 ? (
-          alerts.map((alert, index) => (
+      <CardContent className="p-0">
+        <div className="max-h-80 overflow-y-auto px-6 pb-6">
+          <div className="grid gap-4">
+            {alerts.length > 0 ? (
+              alerts.map((alert, index) => (
             <div key={`${alert.id}-${index}`} className="flex items-start gap-4">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/10">
                 <AlertTriangle className="h-4 w-4 text-destructive" />
@@ -66,15 +68,17 @@ export function AlertsCard({ alerts, onIpSelect, onIpDangerScore }: AlertsCardPr
                     addSuffix: true,
                   })}
                 </p>
+                </div>
               </div>
+            ))
+          ) : (
+            <div className="flex h-24 flex-col items-center justify-center gap-2 text-center">
+              <AlertTriangle className="h-8 w-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">No alerts to show.</p>
             </div>
-          ))
-        ) : (
-          <div className="flex h-24 flex-col items-center justify-center gap-2 text-center">
-            <AlertTriangle className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">No alerts to show.</p>
+          )}
           </div>
-        )}
+        </div>
       </CardContent>
     </Card>
   );
