@@ -115,7 +115,7 @@ export function WhitelistManager() {
                   <FormItem>
                     <FormLabel>IP Address</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., 192.168.1.1" {...field} />
+                      <Input placeholder="e.g., 192.168.1.1" {...field} className="border-[hsl(267.1,37.5%,22%)]" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
