@@ -384,7 +384,7 @@ export default function IpIntelligencePage() {
         </div>
 
         {/* Tabs for different sections */}
-        <Tabs value={activeTab} onValueChange={(value: 'analysis' | 'viewer') => setActiveTab(value)} className="w-full">
+        <Tabs value={activeTab} onValueChange={(value: string) => setActiveTab(value as 'analysis' | 'viewer')} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="analysis" className="flex items-center gap-2">
               <Search className="h-4 w-4" />
@@ -546,42 +546,98 @@ export default function IpIntelligencePage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="text-center">
-                        <p className="text-3xl font-bold">{analysis.dangerScore.dangerScore}/100</p>
-                        <p className="text-sm text-muted-foreground">Danger Score</p>
+                  {/* Check if it's a known threat first */}
+                  {analysis.dangerScore.securityScore === 'unsafe' || analysis.dangerScore.dangerScore > 20 ? (
+                    <>
+                      {/* Show detailed analysis for threats */}
+                      <div className="border-l-4 border-red-500 bg-red-50 p-4 rounded-r-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertTriangle className="h-5 w-5 text-red-600" />
+                          <span className="font-semibold text-red-800">Known Threat Detected</span>
+                        </div>
+                        <p className="text-sm text-red-700">
+                          This IP address has been identified as a security threat and requires immediate attention.
+                        </p>
                       </div>
-                      <div>
-                        <Badge className={`${getDangerLevel(analysis.dangerScore.dangerScore).bgColor} ${getDangerLevel(analysis.dangerScore.dangerScore).color}`}>
-                          {getDangerLevel(analysis.dangerScore.dangerScore).level}
-                        </Badge>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="text-center">
+                            <p className="text-3xl font-bold text-red-600">{analysis.dangerScore.dangerScore}/100</p>
+                            <p className="text-sm text-muted-foreground">Danger Score</p>
+                          </div>
+                          <div>
+                            <Badge className={`${getDangerLevel(analysis.dangerScore.dangerScore).bgColor} ${getDangerLevel(analysis.dangerScore.dangerScore).color}`}>
+                              {getDangerLevel(analysis.dangerScore.dangerScore).level}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex-1 max-w-md">
+                          <Progress value={analysis.dangerScore.dangerScore} className="h-3" />
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex-1 max-w-md">
-                      <Progress value={analysis.dangerScore.dangerScore} className="h-3" />
-                    </div>
-                  </div>
-                  
-                  {analysis.dangerScore.analysisDetails && (
-                    <div className="space-y-2">
-                      <p className="font-medium">AI Analysis:</p>
-                      <p className="text-sm text-muted-foreground">{analysis.dangerScore.analysisDetails}</p>
-                    </div>
-                  )}
-                  
-                  {analysis.dangerScore.securityScore && (
-                    <div className="space-y-2">
-                      <p className="font-medium">Security Assessment:</p>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={analysis.dangerScore.securityScore === 'safe' ? 'default' : 'destructive'}>
-                          {analysis.dangerScore.securityScore.toUpperCase()}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          This IP is classified as {analysis.dangerScore.securityScore}
-                        </span>
+                      
+                      {analysis.dangerScore.analysisDetails && (
+                        <div className="space-y-2">
+                          <p className="font-medium">Threat Analysis:</p>
+                          <p className="text-sm text-muted-foreground">{analysis.dangerScore.analysisDetails}</p>
+                        </div>
+                      )}
+                      
+                      <div className="space-y-2">
+                        <p className="font-medium">Security Status:</p>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="destructive">
+                            THREAT DETECTED
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            This IP poses a security risk to your network
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Show safe status for non-threats */}
+                      <div className="border-l-4 border-green-500 bg-green-50 p-4 rounded-r-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Shield className="h-5 w-5 text-green-600" />
+                          <span className="font-semibold text-green-800">No Known Threats</span>
+                        </div>
+                        <p className="text-sm text-green-700">
+                          This IP address appears to be safe with no known security threats detected.
+                        </p>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="text-center">
+                            <p className="text-3xl font-bold text-green-600">{analysis.dangerScore.dangerScore}/100</p>
+                            <p className="text-sm text-muted-foreground">Safety Score</p>
+                          </div>
+                          <div>
+                            <Badge className="bg-green-100 text-green-600">
+                              {getDangerLevel(analysis.dangerScore.dangerScore).level}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex-1 max-w-md">
+                          <Progress value={analysis.dangerScore.dangerScore} className="h-3" />
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <p className="font-medium">Security Status:</p>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="default" className="bg-green-100 text-green-700">
+                            SAFE
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            This IP appears to be legitimate and safe
+                          </span>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -833,7 +889,7 @@ export default function IpIntelligencePage() {
                 <div className="border rounded-lg overflow-hidden">
                   <div className="max-h-96 overflow-y-auto">
                     <table className="w-full">
-                      <thead className="sticky top-0 bg-muted/50 border-b">
+                      <thead className="sticky top-0 bg-background border-b z-10">
                         <tr>
                           <th className="text-left p-3 font-medium">IP Address</th>
                           <th className="text-left p-3 font-medium">Packet Count</th>
