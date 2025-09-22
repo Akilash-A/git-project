@@ -426,7 +426,7 @@ export default function PacketArchivePage() {
               />
               {autoRefresh && (
                 <Select value={refreshInterval.toString()} onValueChange={(v) => setRefreshInterval(parseInt(v))}>
-                  <SelectTrigger className="w-20">
+                  <SelectTrigger className="w-20 border-[hsl(267.1,37.5%,22%)]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -499,13 +499,13 @@ export default function PacketArchivePage() {
                     placeholder="Search packets by IP, protocol, or attack type..."
                     value={filters.search}
                     onChange={(e) => handleFilterChange('search', e.target.value)}
-                    className="pl-10"
+                    className="pl-10 border-[hsl(267.1,37.5%,22%)]"
                   />
                 </div>
                 <Button onClick={applyFilters} disabled={loading}>
                   Search
                 </Button>
-                <Button variant="outline" onClick={clearFilters}>
+                <Button variant="outline" onClick={clearFilters} className="border-[hsl(267.1,37.5%,22%)]">
                   Clear
                 </Button>
               </div>
@@ -649,7 +649,7 @@ export default function PacketArchivePage() {
                   <Button onClick={applyFilters} disabled={loading}>
                     Apply Filters
                   </Button>
-                  <Button variant="outline" onClick={clearFilters}>
+                  <Button variant="outline" onClick={clearFilters} className="border-[hsl(267.1,37.5%,22%)]">
                     Clear All Filters
                   </Button>
                 </div>
@@ -672,7 +672,7 @@ export default function PacketArchivePage() {
 
           <div className="flex items-center gap-2">
             <Select value={itemsPerPage.toString()} onValueChange={(v) => setItemsPerPage(parseInt(v))}>
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-32 border-[hsl(267.1,37.5%,22%)]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
