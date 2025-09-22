@@ -33,6 +33,7 @@ interface NetworkControlsProps {
   selectedInterface: string;
   onInterfaceChange: (interfaceName: string) => void;
   onMonitoringOptionsChange: (options: MonitoringOptions) => void;
+  onToggleMonitoring?: () => void;
   isConnected: boolean;
   isMonitoring: boolean;
 }
@@ -42,6 +43,7 @@ export function NetworkControls({
   selectedInterface,
   onInterfaceChange,
   onMonitoringOptionsChange,
+  onToggleMonitoring,
   isConnected,
   isMonitoring,
 }: NetworkControlsProps) {

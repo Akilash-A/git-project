@@ -216,7 +216,7 @@ export default function SettingsPage() {
                   <div className="space-y-4">
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="outline" className="w-full" disabled={loading}>
+                        <Button variant="outline" className="w-full border-2 dark:border-gray-600 dark:hover:border-gray-500" disabled={loading}>
                           <Trash2 className="mr-2 h-4 w-4" />
                           Clear Packets
                         </Button>
@@ -242,7 +242,7 @@ export default function SettingsPage() {
 
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="outline" className="w-full" disabled={loading}>
+                        <Button variant="outline" className="w-full border-2 dark:border-gray-600 dark:hover:border-gray-500" disabled={loading}>
                           <Trash2 className="mr-2 h-4 w-4" />
                           Clear Alerts
                         </Button>
@@ -270,7 +270,7 @@ export default function SettingsPage() {
                   <div className="space-y-4">
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="outline" className="w-full" disabled={loading}>
+                        <Button variant="outline" className="w-full border-2 dark:border-gray-600 dark:hover:border-gray-500" disabled={loading}>
                           <Trash2 className="mr-2 h-4 w-4" />
                           Clear Security Analysis
                         </Button>
@@ -382,7 +382,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <Button onClick={saveSettings} className="w-full">
+                <Button onClick={saveSettings} className="w-full border-2 dark:border-gray-600">
                   Save Cleanup Settings
                 </Button>
               </CardContent>
@@ -402,11 +402,11 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Button variant="outline" className="w-full" disabled={loading}>
+                  <Button variant="outline" className="w-full border-2 dark:border-gray-600 dark:hover:border-gray-500" disabled={loading}>
                     <Download className="mr-2 h-4 w-4" />
                     Export Database
                   </Button>
-                  <Button variant="outline" className="w-full" disabled={loading}>
+                  <Button variant="outline" className="w-full border-2 dark:border-gray-600 dark:hover:border-gray-500" disabled={loading}>
                     <Upload className="mr-2 h-4 w-4" />
                     Import Database
                   </Button>

@@ -30,52 +30,14 @@ const generateUniqueAlertId = () => {
 export function DashboardClient() {
   const { toast } = useToast();
   
-  // Initialize packets and alerts from localStorage
-  const [packets, setPackets] = useState<Packet[]>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('netguardian-packets');
-      if (stored) {
-        try {
-          return JSON.parse(stored);
-        } catch (error) {
-          console.error('Failed to parse stored packets:', error);
-        }
-      }
-    }
-    return [];
-  });
-  
-  const [alerts, setAlerts] = useState<Alert[]>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('netguardian-alerts');
-      if (stored) {
-        try {
-          return JSON.parse(stored);
-        } catch (error) {
-          console.error('Failed to parse stored alerts:', error);
-        }
-      }
-    }
-    return [];
-  });
+  // Initialize with empty arrays to avoid hydration mismatch
+  const [packets, setPackets] = useState<Packet[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [totalPackets, setTotalPackets] = useState(0);
+  const [attacksDetected, setAttacksDetected] = useState(0);
+  const [isHydrated, setIsHydrated] = useState(false);
   
   const packetIdsRef = useRef(new Set<string | number>()); // Track packet IDs to prevent duplicates
-  
-  const [totalPackets, setTotalPackets] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('netguardian-total-packets');
-      return stored ? parseInt(stored) : 0;
-    }
-    return 0;
-  });
-  
-  const [attacksDetected, setAttacksDetected] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('netguardian-attacks-detected');
-      return stored ? parseInt(stored) : 0;
-    }
-    return 0;
-  });
   const [isPaused, setIsPaused] = useState(false);
   const [selectedIp, setSelectedIp] = useState<string | null>(null);
   const [dangerScoreIp, setDangerScoreIp] = useState<string | null>(null);
@@ -104,6 +66,42 @@ export function DashboardClient() {
     if (storedIps) {
       setWhitelistedIps(JSON.parse(storedIps));
     }
+    
+    // Load persisted data after hydration
+    const loadPersistedData = () => {
+      try {
+        const storedPackets = localStorage.getItem('netguardian-packets');
+        const storedAlerts = localStorage.getItem('netguardian-alerts');
+        const storedTotalPackets = localStorage.getItem('netguardian-total-packets');
+        const storedAttacksDetected = localStorage.getItem('netguardian-attacks-detected');
+        
+        if (storedPackets) {
+          const parsedPackets = JSON.parse(storedPackets);
+          setPackets(parsedPackets);
+          // Restore packet ID tracking
+          packetIdsRef.current = new Set(parsedPackets.map((p: Packet) => p.id));
+        }
+        
+        if (storedAlerts) {
+          setAlerts(JSON.parse(storedAlerts));
+        }
+        
+        if (storedTotalPackets) {
+          setTotalPackets(parseInt(storedTotalPackets));
+        }
+        
+        if (storedAttacksDetected) {
+          setAttacksDetected(parseInt(storedAttacksDetected));
+        }
+        
+        setIsHydrated(true);
+      } catch (error) {
+        console.error('Failed to load persisted data:', error);
+        setIsHydrated(true);
+      }
+    };
+    
+    loadPersistedData();
     
     // Initialize packet capture service
     initializePacketCapture();
@@ -143,13 +141,6 @@ export function DashboardClient() {
       localStorage.setItem('netguardian-attacks-detected', attacksDetected.toString());
     }
   }, [attacksDetected]);
-
-  // Initialize packet ID tracking from stored packets
-  useEffect(() => {
-    if (packets.length > 0) {
-      packetIdsRef.current = new Set(packets.map(p => p.id));
-    }
-  }, []); // Only run once on mount
 
   // Restore monitoring state after connection is established
   useEffect(() => {
@@ -279,8 +270,8 @@ export function DashboardClient() {
 
   // Fallback to mock data when real monitoring is not available
   useEffect(() => {
-    // Only use mock data if explicitly enabled AND not connected AND not paused
-    if (!useMockData || isPaused || isConnected || isMonitoring) return;
+    // Only use mock data if explicitly enabled AND not connected AND not paused AND monitoring is active
+    if (!useMockData || isPaused || isConnected || !isMonitoring) return;
 
     const interval = setInterval(() => {
       const { packet, alert } = generateMockPacket(whitelistedIps);
@@ -368,6 +359,29 @@ export function DashboardClient() {
           variant: "destructive",
         });
       }
+    } else if (useMockData) {
+      // Handle mock data monitoring toggle
+      if (isMonitoring) {
+        setIsMonitoring(false);
+        localStorage.setItem('netguardian-monitoring', 'false');
+        toast({
+          title: "Monitoring stopped",
+          description: "Simulated packet capture has been stopped.",
+        });
+      } else {
+        setIsMonitoring(true);
+        localStorage.setItem('netguardian-monitoring', 'true');
+        toast({
+          title: "Monitoring started (Simulated)",
+          description: "Using simulated data for demonstration.",
+        });
+      }
+    } else {
+      toast({
+        title: "Connection required",
+        description: "Please connect to the packet monitor server to start monitoring.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -467,13 +481,22 @@ export function DashboardClient() {
             </>
           )}
           {!isConnected && (
-            <Button
-              onClick={() => setIsPaused(!isPaused)}
-              variant="outline"
-              size="sm"
-            >
-              {isPaused ? "Resume Demo" : "Pause Demo"}
-            </Button>
+            <>
+              <Button
+                onClick={toggleMonitoring}
+                variant={isMonitoring ? "destructive" : "default"}
+                size="sm"
+              >
+                {isMonitoring ? "Stop Monitoring" : "Start Monitoring"}
+              </Button>
+              <Button
+                onClick={() => setIsPaused(!isPaused)}
+                variant="outline"
+                size="sm"
+              >
+                {isPaused ? "Resume Demo" : "Pause Demo"}
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -485,12 +508,13 @@ export function DashboardClient() {
           selectedInterface={selectedInterface}
           onInterfaceChange={handleInterfaceChange}
           onMonitoringOptionsChange={handleMonitoringOptionsChange}
+          onToggleMonitoring={toggleMonitoring}
           isConnected={isConnected}
           isMonitoring={isMonitoring}
         />
         
         {/* Data Management Controls */}
-        {(packets.length > 0 || alerts.length > 0) && (
+        {isHydrated && (packets.length > 0 || alerts.length > 0) && (
           <div className="flex gap-2 justify-end">
             <Button 
               variant="outline" 
@@ -498,7 +522,7 @@ export function DashboardClient() {
               onClick={clearStoredData}
               className="text-orange-600 border-orange-200 hover:bg-orange-50"
             >
-              Clear Data
+              Clear Data ({packets.length + alerts.length} items)
             </Button>
           </div>
         )}
