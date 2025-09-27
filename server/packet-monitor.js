@@ -1174,22 +1174,45 @@ class PacketMonitor {
       return false;
     }
 
+    // Check if running as root or if passwordless sudo is configured
+    const isRoot = process.getuid && process.getuid() === 0;
+    const sudoPrefix = isRoot ? '' : 'sudo ';
+
     if (action === 'block') {
-      // Add iptables rule to block IP
-      const command = `sudo iptables -A INPUT -s ${ip} -j DROP`;
-      exec(command, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`Failed to block IP ${ip} at system level:`, error.message);
+      // Check if rule already exists before adding
+      const checkCommand = `${sudoPrefix}iptables -C INPUT -s ${ip} -j DROP 2>/dev/null`;
+      exec(checkCommand, (checkError) => {
+        if (checkError) {
+          // Rule doesn't exist, add it
+          const addCommand = `${sudoPrefix}iptables -A INPUT -s ${ip} -j DROP`;
+          exec(addCommand, { timeout: 5000 }, (error, stdout, stderr) => {
+            if (error) {
+              if (error.message.includes('permission denied') || error.message.includes('EACCES')) {
+                console.error(`❌ Permission denied: Run with 'sudo npm run dev:full' or configure passwordless sudo for iptables`);
+                console.log(`💡 To fix: sudo echo "$(whoami) ALL=(ALL) NOPASSWD: /usr/bin/iptables" | sudo tee /etc/sudoers.d/netguardian-iptables`);
+              } else {
+                console.error(`❌ Failed to block IP ${ip} at system level:`, error.message);
+              }
+            } else {
+              console.log(`🛡️ System-level block applied for IP: ${ip}`);
+            }
+          });
         } else {
-          console.log(`🛡️ System-level block applied for IP: ${ip}`);
+          console.log(`🛡️ System-level block already exists for IP: ${ip}`);
         }
       });
     } else if (action === 'unblock') {
-      // Remove iptables rule
-      const command = `sudo iptables -D INPUT -s ${ip} -j DROP`;
-      exec(command, (error, stdout, stderr) => {
+      // Remove iptables rule (ignore errors if rule doesn't exist)
+      const removeCommand = `${sudoPrefix}iptables -D INPUT -s ${ip} -j DROP`;
+      exec(removeCommand, { timeout: 5000 }, (error, stdout, stderr) => {
         if (error) {
-          console.error(`Failed to unblock IP ${ip} at system level:`, error.message);
+          if (error.message.includes('permission denied') || error.message.includes('EACCES')) {
+            console.error(`❌ Permission denied: Run with 'sudo npm run dev:full' or configure passwordless sudo for iptables`);
+          } else if (!error.message.includes('No chain/target/match')) {
+            console.error(`❌ Failed to unblock IP ${ip} at system level:`, error.message);
+          } else {
+            console.log(`🛡️ System-level block for IP ${ip} was already removed`);
+          }
         } else {
           console.log(`🛡️ System-level block removed for IP: ${ip}`);
         }
@@ -1197,15 +1220,70 @@ class PacketMonitor {
     }
   }
 
+    // Clean up any existing NetGuardian iptables rules
+  cleanupSystemRules() {
+    if (os.platform() !== 'linux') return;
+
+    const isRoot = process.getuid && process.getuid() === 0;
+    const sudoPrefix = isRoot ? '' : 'sudo ';
+
+    // List all iptables rules and remove NetGuardian-related rules
+    const listCommand = `${sudoPrefix}iptables -L INPUT --line-numbers -n`;
+    exec(listCommand, { timeout: 10000 }, (error, stdout, stderr) => {
+      if (error) {
+        console.log('⚠️  Could not list iptables rules for cleanup (may need sudo)');
+        return;
+      }
+
+      // Parse output to find rules that drop specific IPs (our rules)
+      const lines = stdout.split('\n');
+      const rulesToRemove = [];
+
+      lines.forEach((line, index) => {
+        // Look for DROP rules with specific source IPs
+        if (line.includes('DROP') && line.includes('/32')) {
+          const match = line.match(/(\d+)\s+DROP\s+all\s+--\s+(\d+\.\d+\.\d+\.\d+)/);
+          if (match) {
+            rulesToRemove.push({
+              lineNumber: parseInt(match[1]),
+              ip: match[2]
+            });
+          }
+        }
+      });
+
+      // Remove rules in reverse order (highest line number first)
+      rulesToRemove.sort((a, b) => b.lineNumber - a.lineNumber);
+      
+      if (rulesToRemove.length > 0) {
+        console.log(`🧹 Cleaning up ${rulesToRemove.length} existing IP blocking rules...`);
+        rulesToRemove.forEach(rule => {
+          const removeCommand = `${sudoPrefix}iptables -D INPUT ${rule.lineNumber}`;
+          exec(removeCommand, { timeout: 5000 }, (error) => {
+            if (!error) {
+              console.log(`🧹 Removed old rule for IP: ${rule.ip}`);
+            }
+          });
+        });
+      }
+    });
+  }
+
   // Apply all active blocking rules at startup
   initializeSystemBlocking() {
     try {
-      const blockedIps = this.database.getActiveBlockedIps();
-      console.log(`🛡️ Applying system-level blocking for ${blockedIps.length} IPs...`);
-      
-      blockedIps.forEach(ip => {
-        this.applySystemLevelBlocking(ip, 'block');
-      });
+      // Clean up any existing rules first
+      this.cleanupSystemRules();
+
+      // Wait a bit for cleanup to complete, then apply new rules
+      setTimeout(() => {
+        const blockedIps = this.database.getActiveBlockedIps();
+        console.log(`🛡️ Applying system-level blocking for ${blockedIps.length} IPs...`);
+        
+        blockedIps.forEach(ip => {
+          this.applySystemLevelBlocking(ip, 'block');
+        });
+      }, 2000);
     } catch (error) {
       console.error('Failed to initialize system blocking:', error);
     }
