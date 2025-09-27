@@ -10,6 +10,7 @@ import {
   Settings,
   Archive,
   Brain,
+  Network,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 
@@ -91,6 +92,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </Link>
             </TooltipTrigger>
             <TooltipContent side="right">IP Intelligence</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/traffic-control"
+                className={cn("flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:text-foreground md:h-8 md:w-8",
+                  pathname === "/traffic-control" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                )}
+              >
+                <Network className="h-5 w-5" />
+                <span className="sr-only">Traffic Control</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">Traffic Control</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
