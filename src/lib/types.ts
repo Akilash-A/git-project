@@ -10,6 +10,16 @@ export type Packet = {
   attackType: AttackType;
   size?: number;
   direction?: "incoming" | "outgoing" | "local" | "passing";
+  // Detailed attack detection fields
+  isDdosAttack?: boolean | number;
+  isPortScan?: boolean | number;
+  isBruteForce?: boolean | number;
+  isMalware?: boolean | number;
+  isConnectionFlood?: boolean | number;
+  isUnauthorizedAccess?: boolean | number;
+  isKnownThreat?: boolean | number;
+  threatScore?: number;
+  attackDetails?: string;
 };
 
 export type Alert = {

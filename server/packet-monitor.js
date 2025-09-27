@@ -186,6 +186,12 @@ class PacketMonitor {
         const analysis = this.database.getSecurityAnalysis(ip);
         socket.emit('security-analysis-data', { ip, analysis });
       });
+
+      socket.on('get-ip-attack-stats', (data) => {
+        const { ip } = data;
+        const stats = this.database.getIpAttackStatistics(ip);
+        socket.emit('ip-attack-stats-data', stats);
+      });
       
       socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
@@ -520,6 +526,9 @@ class PacketMonitor {
         // Use destination port as the primary port for display
         const displayPort = destPort || sourcePort || 0;
         
+        // Detect attacks and get detailed information
+        const attackInfo = this.detectAttack(cleanSrcIp, cleanDstIp, displayPort);
+        
         const packet = {
           id: this.generateUniquePacketId(),
           timestamp: new Date(parseFloat(timestamp) * 1000).toISOString(),
@@ -529,7 +538,16 @@ class PacketMonitor {
           port: displayPort,
           size: parseInt(frameLen) || 0,
           direction: this.determineDirection(cleanSrcIp, cleanDstIp),
-          attackType: this.detectAttack(cleanSrcIp, cleanDstIp, displayPort)
+          attackType: attackInfo ? attackInfo.attackType : null,
+          isDdosAttack: attackInfo ? attackInfo.isDdosAttack : 0,
+          isPortScan: attackInfo ? attackInfo.isPortScan : 0,
+          isBruteForce: attackInfo ? attackInfo.isBruteForce : 0,
+          isMalware: attackInfo ? attackInfo.isMalware : 0,
+          isConnectionFlood: attackInfo ? attackInfo.isConnectionFlood : 0,
+          isUnauthorizedAccess: attackInfo ? attackInfo.isUnauthorizedAccess : 0,
+          isKnownThreat: attackInfo ? attackInfo.isKnownThreat : 0,
+          threatScore: attackInfo ? attackInfo.threatScore : 0,
+          attackDetails: attackInfo ? attackInfo.attackDetails : null
         };
         
         this.emitPacket(packet);
@@ -556,6 +574,9 @@ class PacketMonitor {
         const protocol = protocolMatch ? protocolMatch[1].toUpperCase() : 'TCP';
         const displayPort = parseInt(dstPort) || parseInt(srcPort) || 0;
         
+        // Detect attacks and get detailed information
+        const attackInfo = this.detectAttack(srcIp, dstIp, displayPort);
+        
         const packet = {
           id: this.generateUniquePacketId(),
           timestamp: new Date().toISOString(),
@@ -565,7 +586,16 @@ class PacketMonitor {
           port: displayPort,
           size: this.extractPacketSize(line),
           direction: this.determineDirection(srcIp, dstIp),
-          attackType: this.detectAttack(srcIp, dstIp, displayPort)
+          attackType: attackInfo ? attackInfo.attackType : null,
+          isDdosAttack: attackInfo ? attackInfo.isDdosAttack : 0,
+          isPortScan: attackInfo ? attackInfo.isPortScan : 0,
+          isBruteForce: attackInfo ? attackInfo.isBruteForce : 0,
+          isMalware: attackInfo ? attackInfo.isMalware : 0,
+          isConnectionFlood: attackInfo ? attackInfo.isConnectionFlood : 0,
+          isUnauthorizedAccess: attackInfo ? attackInfo.isUnauthorizedAccess : 0,
+          isKnownThreat: attackInfo ? attackInfo.isKnownThreat : 0,
+          threatScore: attackInfo ? attackInfo.threatScore : 0,
+          attackDetails: attackInfo ? attackInfo.attackDetails : null
         };
         
         this.emitPacket(packet);
@@ -653,6 +683,20 @@ class PacketMonitor {
     const isFromMyIP = this.attackDetection.localIPs.has(sourceIp);
     const isFromTrustedLocalIP = this.attackDetection.localIPs.has(sourceIp);
     
+    // Initialize detailed attack information
+    const attackInfo = {
+      attackType: null,
+      isDdosAttack: 0,
+      isPortScan: 0,
+      isBruteForce: 0,
+      isMalware: 0,
+      isConnectionFlood: 0,
+      isUnauthorizedAccess: 0,
+      isKnownThreat: 0,
+      threatScore: 0,
+      attackDetails: []
+    };
+    
     // Skip threat detection ONLY for normal router/gateway services
     if (isFromTrustedLocalIP && isTargetingMyIP) {
       const normalRouterPorts = [53, 67, 68]; // DNS, DHCP
@@ -675,12 +719,16 @@ class PacketMonitor {
     if (isTargetingMyIP) {
       const ddosResult = this.detectDDoS(sourceIp, destinationIp, now);
       if (ddosResult) {
+        attackInfo.isDdosAttack = 1;
+        attackInfo.threatScore += 40;
+        attackInfo.attackDetails.push(`DDoS: ${ddosResult}`);
+        if (!attackInfo.attackType) attackInfo.attackType = ddosResult;
+        
         // Only log attacks from non-trusted IPs
         if (!isFromTrustedLocalIP) {
           // console.log(`🚨 DDoS ATTACK DETECTED! ${sourceIp} → ${destinationIp}:${port}`);
           this.alertHighSeverityAttack('DDoS', sourceIp, destinationIp, port);
         }
-        return ddosResult;
       }
     }
     
@@ -688,12 +736,16 @@ class PacketMonitor {
     if (isTargetingMyIP) {
       const portScanResult = this.detectPortScan(sourceIp, destinationIp, port, now);
       if (portScanResult) {
+        attackInfo.isPortScan = 1;
+        attackInfo.threatScore += 25;
+        attackInfo.attackDetails.push('Port scanning activity detected');
+        if (!attackInfo.attackType) attackInfo.attackType = portScanResult;
+        
         // Only log attacks from non-trusted IPs
         if (!isFromTrustedLocalIP) {
           // console.log(`🚨 PORT SCAN DETECTED! ${sourceIp} scanning ${destinationIp}`);
           this.alertHighSeverityAttack('Port Scan', sourceIp, destinationIp, port);
         }
-        return portScanResult;
       }
     }
     
@@ -701,47 +753,81 @@ class PacketMonitor {
     if (isTargetingMyIP && bruteForceports.includes(port)) {
       const bruteForceResult = this.detectBruteForce(sourceIp, destinationIp, port, now);
       if (bruteForceResult) {
+        attackInfo.isBruteForce = 1;
+        attackInfo.threatScore += 35;
+        attackInfo.attackDetails.push(`Brute force on port ${port}`);
+        if (!attackInfo.attackType) attackInfo.attackType = bruteForceResult;
+        
         // Only log attacks from non-trusted IPs
         if (!isFromTrustedLocalIP) {
           console.log(`🚨 BRUTE FORCE ATTACK! ${sourceIp} → ${destinationIp}:${port}`);
           this.alertHighSeverityAttack('Brute Force', sourceIp, destinationIp, port);
         }
-        return bruteForceResult;
       }
     }
     
     // 🚨 Suspicious Port Access targeting your IP
     if (isTargetingMyIP && suspiciousPorts.includes(port)) {
+      if (!attackInfo.isPortScan) { // Don't double-count if already detected as port scan
+        attackInfo.isPortScan = 1;
+        attackInfo.threatScore += 20;
+        attackInfo.attackDetails.push(`Suspicious port access: ${port}`);
+        if (!attackInfo.attackType) attackInfo.attackType = 'Port Scan';
+      }
+      
       // Only log attacks from non-trusted IPs
       if (!isFromTrustedLocalIP) {
         console.log(`⚠️  Suspicious port access: ${sourceIp} → ${destinationIp}:${port}`);
       }
-      return 'Port Scan';
     }
     
     // 🚨 Known Malicious Ports targeting your IP
     if (isTargetingMyIP && knownAttackPorts.includes(port)) {
+      attackInfo.isMalware = 1;
+      attackInfo.threatScore += 50;
+      attackInfo.attackDetails.push(`Malware communication on port ${port}`);
+      if (!attackInfo.attackType) attackInfo.attackType = 'Malware';
+      
       // Only log attacks from non-trusted IPs
       if (!isFromTrustedLocalIP) {
         console.log(`🚨 MALWARE DETECTED! ${sourceIp} → ${destinationIp}:${port}`);
         this.alertHighSeverityAttack('Malware', sourceIp, destinationIp, port);
       }
-      return 'Malware';
     }
     
     // 🚨 External IP trying to access internal services
     if (isTargetingMyIP && !this.isPrivateIP(sourceIp) && this.isPrivateServicePort(port)) {
+      attackInfo.isUnauthorizedAccess = 1;
+      attackInfo.threatScore += 30;
+      attackInfo.attackDetails.push(`Unauthorized access attempt on port ${port}`);
+      if (!attackInfo.attackType) attackInfo.attackType = 'Unauthorized Access';
+      
       console.log(`🚨 EXTERNAL ACCESS ATTEMPT! ${sourceIp} → ${destinationIp}:${port}`);
-      return 'Unauthorized Access';
     }
     
     // 🚨 Known suspicious IP
     if (this.attackDetection.suspiciousIPs.has(sourceIp)) {
+      attackInfo.isKnownThreat = 1;
+      attackInfo.threatScore += 15;
+      attackInfo.attackDetails.push('Known malicious IP address');
+      if (!attackInfo.attackType) attackInfo.attackType = 'Known Threat';
+      
       // Only log attacks from non-trusted IPs
       if (!isFromTrustedLocalIP) {
         // console.log(`🚨 KNOWN THREAT! Suspicious IP ${sourceIp} → ${destinationIp}:${port}`);
       }
-      return 'Known Threat';
+    }
+
+    // Cap threat score at 100
+    attackInfo.threatScore = Math.min(attackInfo.threatScore, 100);
+    
+    // Convert attackDetails array to string
+    attackInfo.attackDetails = attackInfo.attackDetails.length > 0 ? 
+      attackInfo.attackDetails.join('; ') : null;
+    
+    // Return attack information (or null if no attacks detected)
+    if (attackInfo.attackType) {
+      return attackInfo;
     }
     
     return null;

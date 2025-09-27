@@ -15,6 +15,22 @@ const IpAddressSecurityScoringInputSchema = z.object({
   ipAddress: z
     .string()
     .describe('The IP address to be analyzed for security.'),
+  attackData: z
+    .object({
+      totalPackets: z.number().optional(),
+      ddosAttacks: z.number().optional(),
+      portScans: z.number().optional(),
+      bruteForceAttacks: z.number().optional(),
+      malwareDetections: z.number().optional(),
+      connectionFloods: z.number().optional(),
+      unauthorizedAccess: z.number().optional(),
+      knownThreats: z.number().optional(),
+      averageThreatScore: z.number().optional(),
+      maxThreatScore: z.number().optional(),
+      attackDetails: z.array(z.string()).optional()
+    })
+    .optional()
+    .describe('Detailed attack pattern data from packet monitoring'),
 });
 export type IpAddressSecurityScoringInput = z.infer<typeof IpAddressSecurityScoringInputSchema>;
 
@@ -46,20 +62,48 @@ const prompt = ai.definePrompt({
   Analyze the provided IP address against security reputation databases and threat intelligence feeds to assess its risk level.
   Provide both a binary security assessment and a numerical danger score from 0-100.
 
-  Scoring Guidelines:
-  - 0-20: Very Safe (legitimate services, trusted organizations)
-  - 21-40: Low Risk (residential IPs, minor concerns)
-  - 41-60: Medium Risk (suspicious activity, potential threats)
-  - 61-80: High Risk (known malicious activity, botnet members)
-  - 81-100: Extreme Danger (active attacks, blacklisted, major threats)
+  **IMPORTANT**: You now have access to REAL attack pattern data from network monitoring. Use this data heavily in your analysis - it is much more reliable than general IP reputation databases.
+
+  Scoring Guidelines (Enhanced with Attack Data):
+  - 0-20: Very Safe (legitimate services, trusted organizations, no attack patterns)
+  - 21-40: Low Risk (residential IPs, minor suspicious activity, low threat scores)
+  - 41-60: Medium Risk (moderate attack patterns, port scanning, some malicious activity)
+  - 61-80: High Risk (multiple attack types, DDoS/brute force activity, high threat scores)
+  - 81-100: Extreme Danger (active multi-vector attacks, malware, sustained hostile activity)
+
+  **Attack Pattern Weights:**
+  - DDoS Attacks: +30-50 points (depending on frequency)
+  - Malware Communications: +40-60 points
+  - Brute Force Attacks: +25-40 points
+  - Port Scanning: +15-30 points
+  - Unauthorized Access Attempts: +20-35 points
+  - Known Threat Status: +10-25 points
+  - Connection Floods: +20-40 points
 
   IP Address: {{{ipAddress}}}
+  
+  {{#if attackData}}
+  **ATTACK PATTERN DATA:**
+  - Total Monitored Packets: {{attackData.totalPackets}}
+  - DDoS Attacks Detected: {{attackData.ddosAttacks}}
+  - Port Scans Detected: {{attackData.portScans}}
+  - Brute Force Attempts: {{attackData.bruteForceAttacks}}
+  - Malware Communications: {{attackData.malwareDetections}}
+  - Connection Floods: {{attackData.connectionFloods}}
+  - Unauthorized Access Attempts: {{attackData.unauthorizedAccess}}
+  - Known Threat Flags: {{attackData.knownThreats}}
+  - Average Threat Score: {{attackData.averageThreatScore}}
+  - Maximum Threat Score: {{attackData.maxThreatScore}}
+  {{#if attackData.attackDetails}}
+  - Attack Details: {{#each attackData.attackDetails}}{{this}}; {{/each}}
+  {{/if}}
+  {{/if}}
   
   Respond in the following format:
   {
    "securityScore": "safe" | "unsafe",
    "dangerScore": <number 0-100>,
-   "analysisDetails": "Detailed analysis explaining the danger score and specific threats..."
+   "analysisDetails": "Detailed analysis explaining the danger score, incorporating specific attack patterns detected..."
   }`,
 });
 

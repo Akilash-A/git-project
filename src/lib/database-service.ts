@@ -117,6 +117,32 @@ class DatabaseService {
     });
   }
 
+  // Get attack statistics for a specific IP
+  async getIpAttackStatistics(ip: string): Promise<any> {
+    return new Promise((resolve) => {
+      if (!this.socket) {
+        resolve({
+          totalPackets: 0,
+          ddosAttacks: 0,
+          portScans: 0,
+          bruteForceAttacks: 0,
+          malwareDetections: 0,
+          connectionFloods: 0,
+          unauthorizedAccess: 0,
+          knownThreats: 0,
+          averageThreatScore: 0,
+          maxThreatScore: 0
+        });
+        return;
+      }
+
+      this.socket.emit('get-ip-attack-stats', { ip });
+      this.socket.once('ip-attack-stats-data', (stats) => {
+        resolve(stats);
+      });
+    });
+  }
+
   // Data clearing operations
   async clearData(options: { table?: string; daysOld?: number } = {}): Promise<any> {
     return new Promise((resolve) => {

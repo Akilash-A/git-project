@@ -217,10 +217,54 @@ export default function IpIntelligencePage() {
         ipPackets = [];
       }
 
-      // Get AI danger score
+      // Calculate attack statistics from all packets for this IP (not just display packets)
+      let allIpPackets: Packet[] = [];
+      try {
+        const ipFilteredPackets = await databaseService.getPackets({ 
+          limit: 999999,
+          ip: ipAddress 
+        });
+        
+        if (ipFilteredPackets.length > 0) {
+          allIpPackets = ipFilteredPackets;
+        } else {
+          // Fallback: get all packets and filter manually
+          const allPackets: Packet[] = await databaseService.getPackets({ limit: 999999 });
+          allIpPackets = allPackets.filter((p: Packet) => 
+            p.sourceIp === ipAddress || p.destinationIp === ipAddress
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching all packets for attack analysis:", error);
+        allIpPackets = [];
+      }
+
+      // Calculate attack pattern statistics
+      const attackStats = {
+        totalPackets: allIpPackets.length,
+        ddosAttacks: allIpPackets.filter(p => p.isDdosAttack).length,
+        portScans: allIpPackets.filter(p => p.isPortScan).length,
+        bruteForceAttacks: allIpPackets.filter(p => p.isBruteForce).length,
+        malwareDetections: allIpPackets.filter(p => p.isMalware).length,
+        connectionFloods: allIpPackets.filter(p => p.isConnectionFlood).length,
+        unauthorizedAccess: allIpPackets.filter(p => p.isUnauthorizedAccess).length,
+        knownThreats: allIpPackets.filter(p => p.isKnownThreat).length,
+        averageThreatScore: allIpPackets.length > 0 ? 
+          allIpPackets.reduce((sum, p) => sum + (p.threatScore || 0), 0) / allIpPackets.length : 0,
+        maxThreatScore: Math.max(...allIpPackets.map(p => p.threatScore || 0), 0),
+        attackDetails: allIpPackets
+          .filter(p => p.attackDetails)
+          .map(p => p.attackDetails!)
+          .slice(0, 10) // Limit to avoid overwhelming the AI
+      };
+
+      // Get AI danger score with attack data
       let dangerScore: IpAddressSecurityScoringOutput | null = null;
       try {
-        dangerScore = await getIpSecurityScore({ ipAddress });
+        dangerScore = await getIpSecurityScore({ 
+          ipAddress,
+          attackData: attackStats
+        });
       } catch (error) {
         console.error("Error getting danger score:", error);
       }
@@ -530,6 +574,97 @@ export default function IpIntelligencePage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Attack Pattern Analysis */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  Attack Pattern Analysis
+                </CardTitle>
+                <CardDescription>
+                  Detailed threat detection from network monitoring
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 rounded-lg bg-red-50 border border-red-200">
+                    <div className="text-2xl font-bold text-red-600">
+                      {analysis.packets.filter(p => p.isDdosAttack).length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">DDoS Attacks</div>
+                  </div>
+                  
+                  <div className="text-center p-3 rounded-lg bg-orange-50 border border-orange-200">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {analysis.packets.filter(p => p.isPortScan).length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Port Scans</div>
+                  </div>
+                  
+                  <div className="text-center p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+                    <div className="text-2xl font-bold text-yellow-600">
+                      {analysis.packets.filter(p => p.isBruteForce).length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Brute Force</div>
+                  </div>
+                  
+                  <div className="text-center p-3 rounded-lg bg-purple-50 border border-purple-200">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {analysis.packets.filter(p => p.isMalware).length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Malware</div>
+                  </div>
+                  
+                  <div className="text-center p-3 rounded-lg bg-blue-50 border border-blue-200">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {analysis.packets.filter(p => p.isConnectionFlood).length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Conn. Floods</div>
+                  </div>
+                  
+                  <div className="text-center p-3 rounded-lg bg-indigo-50 border border-indigo-200">
+                    <div className="text-2xl font-bold text-indigo-600">
+                      {analysis.packets.filter(p => p.isUnauthorizedAccess).length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Unauth Access</div>
+                  </div>
+                  
+                  <div className="text-center p-3 rounded-lg bg-pink-50 border border-pink-200">
+                    <div className="text-2xl font-bold text-pink-600">
+                      {analysis.packets.filter(p => p.isKnownThreat).length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Known Threats</div>
+                  </div>
+                  
+                  <div className="text-center p-3 rounded-lg bg-gray-50 border border-gray-200">
+                    <div className="text-2xl font-bold text-gray-600">
+                      {analysis.packets.length > 0 ? 
+                        Math.round(analysis.packets.reduce((sum, p) => sum + (p.threatScore || 0), 0) / analysis.packets.length) : 
+                        0
+                      }
+                    </div>
+                    <div className="text-xs text-muted-foreground">Avg Threat Score</div>
+                  </div>
+                </div>
+
+                {/* Threat Score Progress Bar */}
+                {analysis.packets.length > 0 && (
+                  <div className="mt-6">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm font-medium">Maximum Threat Score</span>
+                      <span className="text-sm text-muted-foreground">
+                        {Math.max(...analysis.packets.map(p => p.threatScore || 0), 0)}/100
+                      </span>
+                    </div>
+                    <Progress 
+                      value={Math.max(...analysis.packets.map(p => p.threatScore || 0), 0)} 
+                      className="h-2"
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* AI Danger Score */}
             {analysis.dangerScore && (

@@ -30,6 +30,15 @@ class PacketDatabase {
         size INTEGER NOT NULL,
         direction TEXT NOT NULL,
         attack_type TEXT,
+        is_ddos_attack INTEGER DEFAULT 0,
+        is_port_scan INTEGER DEFAULT 0,
+        is_brute_force INTEGER DEFAULT 0,
+        is_malware INTEGER DEFAULT 0,
+        is_connection_flood INTEGER DEFAULT 0,
+        is_unauthorized_access INTEGER DEFAULT 0,
+        is_known_threat INTEGER DEFAULT 0,
+        threat_score INTEGER DEFAULT 0,
+        attack_details TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -89,8 +98,10 @@ class PacketDatabase {
   // Packet operations
   insertPacket(packet) {
     const stmt = this.db.prepare(`
-      INSERT INTO packets (id, timestamp, source_ip, destination_ip, protocol, port, size, direction, attack_type)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO packets (id, timestamp, source_ip, destination_ip, protocol, port, size, direction, 
+                          attack_type, is_ddos_attack, is_port_scan, is_brute_force, is_malware, 
+                          is_connection_flood, is_unauthorized_access, is_known_threat, threat_score, attack_details)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     try {
@@ -103,7 +114,16 @@ class PacketDatabase {
         packet.port,
         packet.size,
         packet.direction,
-        packet.attackType || null
+        packet.attackType || null,
+        packet.isDdosAttack || 0,
+        packet.isPortScan || 0,
+        packet.isBruteForce || 0,
+        packet.isMalware || 0,
+        packet.isConnectionFlood || 0,
+        packet.isUnauthorizedAccess || 0,
+        packet.isKnownThreat || 0,
+        packet.threatScore || 0,
+        packet.attackDetails || null
       );
     } catch (error) {
       console.error('Error inserting packet:', error.message);
@@ -113,7 +133,11 @@ class PacketDatabase {
   getPackets(limit = 100, offset = 0) {
     const stmt = this.db.prepare(`
       SELECT id, timestamp, source_ip as sourceIp, destination_ip as destinationIp, 
-             protocol, port, size, direction, attack_type as attackType
+             protocol, port, size, direction, attack_type as attackType,
+             is_ddos_attack as isDdosAttack, is_port_scan as isPortScan, 
+             is_brute_force as isBruteForce, is_malware as isMalware,
+             is_connection_flood as isConnectionFlood, is_unauthorized_access as isUnauthorizedAccess,
+             is_known_threat as isKnownThreat, threat_score as threatScore, attack_details as attackDetails
       FROM packets 
       ORDER BY timestamp DESC 
       LIMIT ? OFFSET ?
@@ -124,7 +148,11 @@ class PacketDatabase {
   getPacketsByIp(ip, limit = 50) {
     const stmt = this.db.prepare(`
       SELECT id, timestamp, source_ip as sourceIp, destination_ip as destinationIp, 
-             protocol, port, size, direction, attack_type as attackType
+             protocol, port, size, direction, attack_type as attackType,
+             is_ddos_attack as isDdosAttack, is_port_scan as isPortScan, 
+             is_brute_force as isBruteForce, is_malware as isMalware,
+             is_connection_flood as isConnectionFlood, is_unauthorized_access as isUnauthorizedAccess,
+             is_known_threat as isKnownThreat, threat_score as threatScore, attack_details as attackDetails
       FROM packets 
       WHERE source_ip = ? OR destination_ip = ?
       ORDER BY timestamp DESC 
@@ -270,14 +298,64 @@ class PacketDatabase {
       SELECT COUNT(DISTINCT source_ip) as count FROM packets
     `).get().count;
 
+    // Attack statistics
+    const attackStats = this.getAttackStatistics();
+
     return {
       totalPackets: packetsCount,
       totalAlerts: alertsCount,
       whitelistedIPs: whitelistCount,
       securityAnalyses: analysisCount,
       packetsLastHour: lastHourPackets,
-      uniqueIPs: uniqueIPs
+      uniqueIPs: uniqueIPs,
+      ...attackStats
     };
+  }
+
+  // Get detailed attack statistics
+  getAttackStatistics() {
+    const ddosAttacks = this.db.prepare(`SELECT COUNT(*) as count FROM packets WHERE is_ddos_attack = 1`).get().count;
+    const portScans = this.db.prepare(`SELECT COUNT(*) as count FROM packets WHERE is_port_scan = 1`).get().count;
+    const bruteForceAttacks = this.db.prepare(`SELECT COUNT(*) as count FROM packets WHERE is_brute_force = 1`).get().count;
+    const malwareDetections = this.db.prepare(`SELECT COUNT(*) as count FROM packets WHERE is_malware = 1`).get().count;
+    const connectionFloods = this.db.prepare(`SELECT COUNT(*) as count FROM packets WHERE is_connection_flood = 1`).get().count;
+    const unauthorizedAccess = this.db.prepare(`SELECT COUNT(*) as count FROM packets WHERE is_unauthorized_access = 1`).get().count;
+    const knownThreats = this.db.prepare(`SELECT COUNT(*) as count FROM packets WHERE is_known_threat = 1`).get().count;
+    
+    const totalAttacks = ddosAttacks + portScans + bruteForceAttacks + malwareDetections + 
+                        connectionFloods + unauthorizedAccess + knownThreats;
+
+    return {
+      totalAttacks,
+      ddosAttacks,
+      portScans,
+      bruteForceAttacks,
+      malwareDetections,
+      connectionFloods,
+      unauthorizedAccess,
+      knownThreats
+    };
+  }
+
+  // Get attack statistics for a specific IP
+  getIpAttackStatistics(ip) {
+    const stmt = this.db.prepare(`
+      SELECT 
+        COUNT(*) as totalPackets,
+        SUM(is_ddos_attack) as ddosAttacks,
+        SUM(is_port_scan) as portScans,
+        SUM(is_brute_force) as bruteForceAttacks,
+        SUM(is_malware) as malwareDetections,
+        SUM(is_connection_flood) as connectionFloods,
+        SUM(is_unauthorized_access) as unauthorizedAccess,
+        SUM(is_known_threat) as knownThreats,
+        AVG(threat_score) as averageThreatScore,
+        MAX(threat_score) as maxThreatScore
+      FROM packets 
+      WHERE source_ip = ? OR destination_ip = ?
+    `);
+    
+    return stmt.get(ip, ip);
   }
 
   // Settings operations
