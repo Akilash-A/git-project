@@ -192,6 +192,69 @@ class PacketMonitor {
         const stats = this.database.getIpAttackStatistics(ip);
         socket.emit('ip-attack-stats-data', stats);
       });
+
+      // Traffic control operations
+      socket.on('add-traffic-rule', (rule) => {
+        const id = this.database.addTrafficRule(rule);
+        const success = !!id;
+        
+        if (success && rule.action === 'block') {
+          // Apply system-level blocking
+          this.applySystemLevelBlocking(rule.ip, 'block');
+        }
+        
+        socket.emit('traffic-rule-added', { success, id, rule });
+        
+        // Broadcast to all clients that traffic rules have been updated
+        this.io.emit('traffic-rules-updated');
+      });
+
+      socket.on('get-traffic-rules', () => {
+        const rules = this.database.getTrafficRules();
+        socket.emit('traffic-rules-data', rules);
+      });
+
+      socket.on('update-traffic-rule-status', (data) => {
+        const { ruleId, status } = data;
+        
+        // Get rule details before updating
+        const rules = this.database.getTrafficRules();
+        const rule = rules.find(r => r.id === ruleId);
+        
+        const success = this.database.updateTrafficRuleStatus(ruleId, status);
+        
+        if (success && rule && rule.action === 'block') {
+          // Apply or remove system-level blocking based on status
+          if (status === 'active') {
+            this.applySystemLevelBlocking(rule.ip, 'block');
+          } else {
+            this.applySystemLevelBlocking(rule.ip, 'unblock');
+          }
+        }
+        
+        socket.emit('traffic-rule-status-updated', { success, ruleId, status });
+        
+        // Broadcast to all clients that traffic rules have been updated
+        this.io.emit('traffic-rules-updated');
+      });
+
+      socket.on('remove-traffic-rule', (ruleId) => {
+        // Get rule details before removing
+        const rules = this.database.getTrafficRules();
+        const rule = rules.find(r => r.id === ruleId);
+        
+        const success = this.database.removeTrafficRule(ruleId);
+        
+        if (success && rule && rule.action === 'block') {
+          // Remove system-level blocking
+          this.applySystemLevelBlocking(rule.ip, 'unblock');
+        }
+        
+        socket.emit('traffic-rule-removed', { success, ruleId });
+        
+        // Broadcast to all clients that traffic rules have been updated
+        this.io.emit('traffic-rules-updated');
+      });
       
       socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
@@ -980,7 +1043,87 @@ class PacketMonitor {
   emitPacket(packet) {
     // Only emit packets if monitoring is active
     if (!this.isMonitoring) return;
+
+    // Check if source IP is blocked
+    const isSourceBlocked = this.database.isIpBlocked(packet.sourceIp);
+    const isDestinationBlocked = this.database.isIpBlocked(packet.destinationIp);
     
+    // If either source or destination IP is blocked, handle accordingly
+    if (isSourceBlocked || isDestinationBlocked) {
+      const blockedIp = isSourceBlocked ? packet.sourceIp : packet.destinationIp;
+      const direction = isSourceBlocked ? 'from' : 'to';
+      
+      // Create immediate alert for blocked IP activity
+      const blockAlert = {
+        id: this.generateUniqueAlertId(),
+        timestamp: packet.timestamp,
+        message: `🚫 BLOCKED IP ACTIVITY: Traffic ${direction} blocked IP ${blockedIp}`,
+        ip: blockedIp,
+        type: 'IP_BLOCKED'
+      };
+      
+      // Log the blocked attempt
+      console.log(`🚫 BLOCKED: ${packet.sourceIp} → ${packet.destinationIp}:${packet.port} (${packet.protocol})`);
+      
+      // Save the blocked attempt to database for logging purposes
+      const blockedPacket = {
+        ...packet,
+        attackType: 'IP_BLOCKED',
+        threatScore: 100,
+        attackDetails: `Traffic blocked - IP ${blockedIp} is in block list`
+      };
+      this.database.insertPacket(blockedPacket);
+      this.database.insertAlert(blockAlert);
+      
+      // Emit the block alert to clients
+      this.io.emit('new-packet', { 
+        packet: blockedPacket, 
+        alert: blockAlert,
+        blocked: true 
+      });
+      
+      // Also emit a critical alert
+      this.io.emit('critical-attack', {
+        severity: 'BLOCKED',
+        attackType: 'IP_BLOCKED',
+        sourceIp: packet.sourceIp,
+        destinationIp: packet.destinationIp,
+        port: packet.port,
+        timestamp: packet.timestamp,
+        message: `🚫 BLOCKED: Traffic ${direction} blocked IP ${blockedIp}`
+      });
+      
+      return; // Don't process the packet further
+    }
+
+    // Check for throttling
+    const sourceThrottleDelay = this.database.getIpThrottleDelay(packet.sourceIp);
+    const destThrottleDelay = this.database.getIpThrottleDelay(packet.destinationIp);
+    
+    if (sourceThrottleDelay || destThrottleDelay) {
+      const delay = sourceThrottleDelay || destThrottleDelay;
+      const throttledIp = sourceThrottleDelay ? packet.sourceIp : packet.destinationIp;
+      
+      console.log(`⏱️ THROTTLED: ${packet.sourceIp} → ${packet.destinationIp}:${packet.port} (delay: ${delay}ms)`);
+      
+      // Add throttling information to packet
+      packet.throttled = true;
+      packet.throttleDelay = delay;
+      packet.throttledIp = throttledIp;
+      
+      // Delay the packet processing
+      setTimeout(() => {
+        this.processNormalPacket(packet);
+      }, delay);
+      
+      return;
+    }
+    
+    // Process normal packet
+    this.processNormalPacket(packet);
+  }
+
+  processNormalPacket(packet) {
     // Save packet to database
     this.database.insertPacket(packet);
     
@@ -1024,11 +1167,58 @@ class PacketMonitor {
     this.io.emit('capture-error', { message });
   }
 
+  // System-level IP blocking using iptables (Linux only)
+  applySystemLevelBlocking(ip, action = 'block') {
+    if (os.platform() !== 'linux') {
+      console.log('⚠️  System-level blocking only supported on Linux');
+      return false;
+    }
+
+    if (action === 'block') {
+      // Add iptables rule to block IP
+      const command = `sudo iptables -A INPUT -s ${ip} -j DROP`;
+      exec(command, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Failed to block IP ${ip} at system level:`, error.message);
+        } else {
+          console.log(`🛡️ System-level block applied for IP: ${ip}`);
+        }
+      });
+    } else if (action === 'unblock') {
+      // Remove iptables rule
+      const command = `sudo iptables -D INPUT -s ${ip} -j DROP`;
+      exec(command, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Failed to unblock IP ${ip} at system level:`, error.message);
+        } else {
+          console.log(`🛡️ System-level block removed for IP: ${ip}`);
+        }
+      });
+    }
+  }
+
+  // Apply all active blocking rules at startup
+  initializeSystemBlocking() {
+    try {
+      const blockedIps = this.database.getActiveBlockedIps();
+      console.log(`🛡️ Applying system-level blocking for ${blockedIps.length} IPs...`);
+      
+      blockedIps.forEach(ip => {
+        this.applySystemLevelBlocking(ip, 'block');
+      });
+    } catch (error) {
+      console.error('Failed to initialize system blocking:', error);
+    }
+  }
+
   start() {
     this.server.listen(this.port, () => {
       console.log(`🚀 Packet Monitor Server running on port ${this.port}`);
       console.log(`🌐 WebSocket endpoint: ws://localhost:${this.port}`);
       console.log(`🔧 Capture method: ${this.captureMethod}`);
+      
+      // Initialize system-level blocking
+      this.initializeSystemBlocking();
     });
   }
 }

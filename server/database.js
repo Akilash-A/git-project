@@ -90,12 +90,27 @@ class PacketDatabase {
       )
     `);
 
+    // Create traffic control table for IP blocking and throttling
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS traffic_control (
+        id TEXT PRIMARY KEY,
+        ip TEXT NOT NULL,
+        action TEXT NOT NULL, -- 'block' or 'throttle'
+        delay INTEGER, -- delay in ms for throttle
+        status TEXT DEFAULT 'active', -- 'active' or 'inactive'
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create indexes for better performance
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_packets_timestamp ON packets(timestamp)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_packets_source_ip ON packets(source_ip)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON alerts(timestamp)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_alerts_ip ON alerts(ip)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_security_analysis_ip ON security_analysis(ip)`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_traffic_control_ip ON traffic_control(ip)`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_traffic_control_status ON traffic_control(status)`);
   }
 
   migratePacketsTable() {
@@ -427,6 +442,72 @@ class PacketDatabase {
     });
     
     return settings;
+  }
+
+  // Traffic control operations
+  addTrafficRule(rule) {
+    const stmt = this.db.prepare(`
+      INSERT INTO traffic_control (id, ip, action, delay, status)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    
+    try {
+      const result = stmt.run(rule.id, rule.ip, rule.action, rule.delay || null, rule.status || 'active');
+      return result.lastInsertRowid;
+    } catch (error) {
+      console.error('Error adding traffic rule:', error.message);
+      return null;
+    }
+  }
+
+  getTrafficRules() {
+    const stmt = this.db.prepare(`
+      SELECT id, ip, action, delay, status, created_at, updated_at
+      FROM traffic_control 
+      ORDER BY created_at DESC
+    `);
+    return stmt.all();
+  }
+
+  updateTrafficRuleStatus(ruleId, status) {
+    const stmt = this.db.prepare(`
+      UPDATE traffic_control 
+      SET status = ?, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ?
+    `);
+    const result = stmt.run(status, ruleId);
+    return result.changes > 0;
+  }
+
+  removeTrafficRule(ruleId) {
+    const stmt = this.db.prepare(`DELETE FROM traffic_control WHERE id = ?`);
+    const result = stmt.run(ruleId);
+    return result.changes > 0;
+  }
+
+  isIpBlocked(ip) {
+    const stmt = this.db.prepare(`
+      SELECT 1 FROM traffic_control 
+      WHERE ip = ? AND action = 'block' AND status = 'active'
+    `);
+    return stmt.get(ip) !== undefined;
+  }
+
+  getIpThrottleDelay(ip) {
+    const stmt = this.db.prepare(`
+      SELECT delay FROM traffic_control 
+      WHERE ip = ? AND action = 'throttle' AND status = 'active'
+    `);
+    const result = stmt.get(ip);
+    return result ? result.delay : null;
+  }
+
+  getActiveBlockedIps() {
+    const stmt = this.db.prepare(`
+      SELECT ip FROM traffic_control 
+      WHERE action = 'block' AND status = 'active'
+    `);
+    return stmt.all().map(row => row.ip);
   }
 
   // Database maintenance

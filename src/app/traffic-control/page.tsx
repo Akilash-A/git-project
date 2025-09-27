@@ -51,6 +51,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
+import databaseService from "@/lib/database-service";
 
 const ipSchema = z.object({
   ip: z.string().ip({ version: "v4", message: "Invalid IPv4 address" }),
@@ -90,21 +91,46 @@ export default function TrafficControlPage() {
   const [trafficRules, setTrafficRules] = useState<TrafficRule[]>([]);
   const [isClient, setIsClient] = useState(false);
 
-  useEffect(() => {
-    setIsClient(true);
-    const storedRules = localStorage.getItem("trafficRules");
-    if (storedRules) {
-      setTrafficRules(JSON.parse(storedRules));
-    } else {
-      setTrafficRules(initialRules);
+  // Load traffic rules from database
+  const loadTrafficRules = async () => {
+    try {
+      const rules = await databaseService.getTrafficRules();
+      setTrafficRules(rules.map(rule => ({
+        id: rule.id,
+        ip: rule.ip,
+        action: rule.action as "block" | "throttle",
+        delay: rule.delay,
+        createdAt: rule.created_at,
+        status: rule.status as "active" | "inactive"
+      })));
+    } catch (error) {
+      console.error('Failed to load traffic rules:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load traffic rules from server.",
+        variant: "destructive",
+      });
     }
-  }, []);
+  };
 
   useEffect(() => {
-    if (isClient) {
-      localStorage.setItem("trafficRules", JSON.stringify(trafficRules));
-    }
-  }, [trafficRules, isClient]);
+    setIsClient(true);
+    loadTrafficRules();
+  }, []);
+
+  // Listen for traffic rules updates from other clients
+  useEffect(() => {
+    // TODO: Add real-time updates listener
+    // For now, we'll poll for updates when the page gains focus
+    const handleFocus = () => {
+      loadTrafficRules();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
 
   const form = useForm<z.infer<typeof ipSchema>>({
     resolver: zodResolver(ipSchema),
@@ -117,7 +143,7 @@ export default function TrafficControlPage() {
 
   const watchAction = form.watch("action");
 
-  function onSubmit(values: z.infer<typeof ipSchema>) {
+  async function onSubmit(values: z.infer<typeof ipSchema>) {
     // Check if IP already exists
     if (trafficRules.some(rule => rule.ip === values.ip)) {
       form.setError("ip", {
@@ -127,44 +153,108 @@ export default function TrafficControlPage() {
       return;
     }
 
-    const newRule: TrafficRule = {
+    const newRule = {
       id: Date.now().toString(),
       ip: values.ip,
       action: values.action,
       delay: values.action === "throttle" ? values.delay : undefined,
-      createdAt: new Date().toISOString(),
       status: "active"
     };
 
-    setTrafficRules(prev => [...prev, newRule]);
-    form.reset();
-    
-    toast({
-      title: "Traffic Rule Added",
-      description: `${values.action === "block" ? "Blocked" : "Throttled"} IP: ${values.ip}`,
-    });
-  }
-
-  function removeRule(ruleId: string) {
-    const rule = trafficRules.find(r => r.id === ruleId);
-    setTrafficRules(prev => prev.filter(r => r.id !== ruleId));
-    
-    if (rule) {
+    try {
+      const result = await databaseService.addTrafficRule(newRule);
+      
+      if (result.success) {
+        // Reload rules from database to get the latest state
+        await loadTrafficRules();
+        form.reset();
+        
+        toast({
+          title: "Traffic Rule Added",
+          description: `${values.action === "block" ? "Blocked" : "Throttled"} IP: ${values.ip}`,
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to add traffic rule.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Failed to add traffic rule:', error);
       toast({
-        title: "Rule Removed",
-        description: `Removed ${rule.action} rule for IP: ${rule.ip}`,
+        title: "Error",
+        description: "Failed to add traffic rule to server.",
+        variant: "destructive",
       });
     }
   }
 
-  function toggleRuleStatus(ruleId: string) {
-    setTrafficRules(prev => 
-      prev.map(rule => 
-        rule.id === ruleId 
-          ? { ...rule, status: rule.status === "active" ? "inactive" : "active" }
-          : rule
-      )
-    );
+  async function removeRule(ruleId: string) {
+    const rule = trafficRules.find(r => r.id === ruleId);
+    
+    try {
+      const success = await databaseService.removeTrafficRule(ruleId);
+      
+      if (success) {
+        // Reload rules from database
+        await loadTrafficRules();
+        
+        if (rule) {
+          toast({
+            title: "Rule Removed",
+            description: `Removed ${rule.action} rule for IP: ${rule.ip}`,
+          });
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to remove traffic rule.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Failed to remove traffic rule:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove traffic rule from server.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function toggleRuleStatus(ruleId: string) {
+    const rule = trafficRules.find(r => r.id === ruleId);
+    if (!rule) return;
+    
+    const newStatus = rule.status === "active" ? "inactive" : "active";
+    
+    try {
+      const success = await databaseService.updateTrafficRuleStatus(ruleId, newStatus);
+      
+      if (success) {
+        // Reload rules from database
+        await loadTrafficRules();
+        
+        toast({
+          title: "Rule Updated",
+          description: `${rule.action} rule for ${rule.ip} is now ${newStatus}`,
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to update traffic rule status.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Failed to update traffic rule status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update traffic rule status on server.",
+        variant: "destructive",
+      });
+    }
   }
 
   if (!isClient) {
@@ -235,7 +325,7 @@ export default function TrafficControlPage() {
             <CardHeader>
               <CardTitle>Add Traffic Control Rule</CardTitle>
               <CardDescription>
-                Block an IP address or throttle its response time.
+                Block an IP address or throttle its response time. Blocked IPs are prevented from accessing your network at both application and system levels.
               </CardDescription>
             </CardHeader>
             <CardContent>

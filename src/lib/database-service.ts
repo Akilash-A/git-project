@@ -143,6 +143,63 @@ class DatabaseService {
     });
   }
 
+  // Traffic control operations
+  async addTrafficRule(rule: any): Promise<{ success: boolean; id?: string }> {
+    return new Promise((resolve) => {
+      if (!this.socket) {
+        resolve({ success: false });
+        return;
+      }
+
+      this.socket.emit('add-traffic-rule', rule);
+      this.socket.once('traffic-rule-added', (result) => {
+        resolve(result);
+      });
+    });
+  }
+
+  async getTrafficRules(): Promise<any[]> {
+    return new Promise((resolve) => {
+      if (!this.socket) {
+        resolve([]);
+        return;
+      }
+
+      this.socket.emit('get-traffic-rules');
+      this.socket.once('traffic-rules-data', (rules) => {
+        resolve(rules);
+      });
+    });
+  }
+
+  async updateTrafficRuleStatus(ruleId: string, status: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.socket) {
+        resolve(false);
+        return;
+      }
+
+      this.socket.emit('update-traffic-rule-status', { ruleId, status });
+      this.socket.once('traffic-rule-status-updated', (result) => {
+        resolve(result.success);
+      });
+    });
+  }
+
+  async removeTrafficRule(ruleId: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.socket) {
+        resolve(false);
+        return;
+      }
+
+      this.socket.emit('remove-traffic-rule', ruleId);
+      this.socket.once('traffic-rule-removed', (result) => {
+        resolve(result.success);
+      });
+    });
+  }
+
   // Data clearing operations
   async clearData(options: { table?: string; daysOld?: number } = {}): Promise<any> {
     return new Promise((resolve) => {
