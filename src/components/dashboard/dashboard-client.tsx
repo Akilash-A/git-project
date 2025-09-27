@@ -7,6 +7,7 @@ import { Gauge, AlertTriangle, ShieldCheck, Wifi, WifiOff } from "lucide-react";
 import type { Packet, Alert } from "@/lib/types";
 import { generateMockPacket } from "@/lib/mock-data";
 import { packetCaptureService, type NetworkInterface, type MonitoringOptions } from "@/lib/packet-capture-service";
+import databaseService from "@/lib/database-service";
 import { useToast } from "@/hooks/use-toast";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { PacketTable } from "@/components/dashboard/packet-table";
@@ -35,6 +36,8 @@ export function DashboardClient() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [totalPackets, setTotalPackets] = useState(0);
   const [attacksDetected, setAttacksDetected] = useState(0);
+  const [sessionPackets, setSessionPackets] = useState(0); // Session-based counter for new packets
+  const [sessionAttacks, setSessionAttacks] = useState(0); // Session-based counter for new attacks
   const [isHydrated, setIsHydrated] = useState(false);
   
   const packetIdsRef = useRef(new Set<string | number>()); // Track packet IDs to prevent duplicates
@@ -66,6 +69,28 @@ export function DashboardClient() {
     isMonitoringRef.current = isMonitoring;
   }, [isMonitoring]);
 
+  // Function to load real statistics from database
+  const loadDatabaseStatistics = useCallback(async () => {
+    try {
+      const stats = await databaseService.getStatistics();
+      setTotalPackets(stats.totalPackets || 0);
+      setAttacksDetected(stats.totalAttacks || 0);
+    } catch (error) {
+      console.error('Failed to load database statistics:', error);
+      // Fallback to localStorage values if database fails
+      const storedTotalPackets = localStorage.getItem('netguardian-total-packets');
+      const storedAttacksDetected = localStorage.getItem('netguardian-attacks-detected');
+      
+      if (storedTotalPackets) {
+        setTotalPackets(parseInt(storedTotalPackets));
+      }
+      
+      if (storedAttacksDetected) {
+        setAttacksDetected(parseInt(storedAttacksDetected));
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const storedIps = localStorage.getItem("whitelistedIps");
     if (storedIps) {
@@ -92,11 +117,11 @@ export function DashboardClient() {
         }
         
         if (storedTotalPackets) {
-          setTotalPackets(parseInt(storedTotalPackets));
+          setSessionPackets(parseInt(storedTotalPackets));
         }
         
         if (storedAttacksDetected) {
-          setAttacksDetected(parseInt(storedAttacksDetected));
+          setSessionAttacks(parseInt(storedAttacksDetected));
         }
         
         setIsHydrated(true);
@@ -108,9 +133,39 @@ export function DashboardClient() {
     
     loadPersistedData();
     
+    // Load real statistics from database
+    loadDatabaseStatistics();
+    
+    // Set up periodic refresh of database statistics every 30 seconds
+    const statsInterval = setInterval(loadDatabaseStatistics, 30000);
+    
     // Initialize packet capture service
     initializePacketCapture();
-  }, []);
+    
+    // Cleanup interval on unmount
+    return () => {
+      clearInterval(statsInterval);
+    };
+  }, [loadDatabaseStatistics]);
+
+  // Refresh statistics when the page becomes visible (e.g., when switching back from another tab/page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadDatabaseStatistics();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Also refresh when window gains focus
+    window.addEventListener('focus', loadDatabaseStatistics);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', loadDatabaseStatistics);
+    };
+  }, [loadDatabaseStatistics]);
 
   // Persist packets data to localStorage (debounced to avoid excessive writes)
   useEffect(() => {
@@ -134,18 +189,18 @@ export function DashboardClient() {
     }
   }, [alerts]);
 
-  // Persist counters to localStorage
+  // Persist session counters to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('netguardian-total-packets', totalPackets.toString());
+      localStorage.setItem('netguardian-total-packets', sessionPackets.toString());
     }
-  }, [totalPackets]);
+  }, [sessionPackets]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('netguardian-attacks-detected', attacksDetected.toString());
+      localStorage.setItem('netguardian-attacks-detected', sessionAttacks.toString());
     }
-  }, [attacksDetected]);
+  }, [sessionAttacks]);
 
   // Restore monitoring state after connection is established
   useEffect(() => {
@@ -209,11 +264,11 @@ export function DashboardClient() {
           
           return newPackets;
         });
-        setTotalPackets((prev) => prev + 1);
+        setSessionPackets((prev) => prev + 1);
 
         if (alert && !isWhitelisted) {
           setAlerts((prev) => [alert, ...prev].slice(0, MAX_ALERTS));
-          setAttacksDetected((prev) => prev + 1);
+          setSessionAttacks((prev) => prev + 1);
           toast({
             variant: "destructive",
             title: "🚨 Attack Detected!",
@@ -235,7 +290,7 @@ export function DashboardClient() {
           type: criticalAlert.attackType
         }, ...prev].slice(0, MAX_ALERTS));
         
-        setAttacksDetected((prev) => prev + 1);
+        setSessionAttacks((prev) => prev + 1);
         
         // Show urgent toast for critical attacks
         toast({
@@ -302,11 +357,11 @@ export function DashboardClient() {
         
         return newPackets;
       });
-      setTotalPackets((prev) => prev + 1);
+      setSessionPackets((prev) => prev + 1);
 
       if (alert) {
         setAlerts((prev) => [alert, ...prev].slice(0, MAX_ALERTS));
-        setAttacksDetected((prev) => prev + 1);
+        setSessionAttacks((prev) => prev + 1);
         toast({
           variant: "destructive",
           title: "🚨 Attack Detected! (Simulated)",
@@ -508,15 +563,15 @@ export function DashboardClient() {
       <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-3">
         <StatsCard
           title="Total Packets"
-          value={totalPackets.toLocaleString()}
+          value={(totalPackets + sessionPackets).toLocaleString()}
           icon={Gauge}
-          description="Total packets processed since session start."
+          description="Total packets processed (database + session)."
         />
         <StatsCard
           title="Attacks Detected"
-          value={attacksDetected.toLocaleString()}
+          value={(attacksDetected + sessionAttacks).toLocaleString()}
           icon={AlertTriangle}
-          description="Potential threats identified in the network."
+          description="Total threats identified (database + session)."
           variant="destructive"
         />
         <StatsCard

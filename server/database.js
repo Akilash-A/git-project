@@ -43,6 +43,9 @@ class PacketDatabase {
       )
     `);
 
+    // Migrate existing packets table to add new attack detection columns
+    this.migratePacketsTable();
+
     // Create alerts table
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS alerts (
@@ -93,6 +96,36 @@ class PacketDatabase {
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON alerts(timestamp)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_alerts_ip ON alerts(ip)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_security_analysis_ip ON security_analysis(ip)`);
+  }
+
+  migratePacketsTable() {
+    // Check if new columns exist, if not add them
+    const tableInfo = this.db.prepare("PRAGMA table_info(packets)").all();
+    const columnNames = tableInfo.map(col => col.name);
+    
+    const newColumns = [
+      { name: 'is_ddos_attack', definition: 'INTEGER DEFAULT 0' },
+      { name: 'is_port_scan', definition: 'INTEGER DEFAULT 0' },
+      { name: 'is_brute_force', definition: 'INTEGER DEFAULT 0' },
+      { name: 'is_malware', definition: 'INTEGER DEFAULT 0' },
+      { name: 'is_connection_flood', definition: 'INTEGER DEFAULT 0' },
+      { name: 'is_unauthorized_access', definition: 'INTEGER DEFAULT 0' },
+      { name: 'is_known_threat', definition: 'INTEGER DEFAULT 0' },
+      { name: 'threat_score', definition: 'INTEGER DEFAULT 0' },
+      { name: 'attack_details', definition: 'TEXT' }
+    ];
+
+    // Add missing columns
+    newColumns.forEach(column => {
+      if (!columnNames.includes(column.name)) {
+        try {
+          this.db.exec(`ALTER TABLE packets ADD COLUMN ${column.name} ${column.definition}`);
+          console.log(`✓ Added column ${column.name} to packets table`);
+        } catch (error) {
+          console.error(`Error adding column ${column.name}:`, error.message);
+        }
+      }
+    });
   }
 
   // Packet operations
