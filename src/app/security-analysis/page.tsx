@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, Shield, AlertTriangle, CheckCircle, Loader2, Activity, TrendingUp } from "lucide-react";
+import { Search, Shield, AlertTriangle, CheckCircle, Loader2, Activity, TrendingUp, BarChart3 } from "lucide-react";
 
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -225,7 +225,10 @@ export default function ScoreboardPage() {
     <DashboardLayout>
       <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
         <div className="mx-auto grid w-full max-w-6xl gap-2">
-          <h1 className="text-3xl font-semibold">IP Security Analysis</h1>
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-8 w-8" />
+            <h1 className="text-3xl font-semibold">IP Security Analysis</h1>
+          </div>
           <p className="text-muted-foreground">
             Analyze IP addresses using AI to determine their security risk level and get detailed threat intelligence.
           </p>

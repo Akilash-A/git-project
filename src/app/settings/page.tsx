@@ -172,7 +172,8 @@ export default function SettingsPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
+          <SettingsIcon className="h-6 w-6" />
           <h1 className="font-headline text-lg font-semibold md:text-2xl">
             Settings
           </h1>
