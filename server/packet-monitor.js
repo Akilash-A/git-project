@@ -404,13 +404,11 @@ class PacketMonitor {
     if (this.tsharkProcess) {
       this.tsharkProcess.kill('SIGTERM');
       this.tsharkProcess = null;
-      console.log('🛑 Stopped tshark process');
     }
     
     if (this.tcpdumpProcess) {
       this.tcpdumpProcess.kill('SIGTERM');
       this.tcpdumpProcess = null;
-      console.log('🛑 Stopped tcpdump process');
     }
   }
 
@@ -464,9 +462,6 @@ class PacketMonitor {
       
       this.tsharkProcess.stderr.on('data', (data) => {
         const message = data.toString();
-        if (message.includes('Capturing on')) {
-          console.log('✅ Tshark capturing:', message.trim());
-        }
       });
       
       this.tsharkProcess.on('close', (code) => {
