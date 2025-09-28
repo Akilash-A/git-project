@@ -10,7 +10,17 @@ import {
 export async function getIpSecurityScore(
   input: IpAddressSecurityScoringInput
 ): Promise<IpAddressSecurityScoringOutput> {
-  // In a real application, you might add more validation or error handling here.
-  const result = await ipAddressSecurityScoring(input);
-  return result;
+  try {
+    const result = await ipAddressSecurityScoring(input);
+    return result;
+  } catch (error: any) {
+    console.error('IP Security Analysis Error:', error.message);
+    
+    // Return fallback response for better user experience
+    return {
+      securityScore: 'service-unavailable',
+      dangerScore: 50,
+      analysisDetails: `Unable to analyze IP ${input.ipAddress} - AI analysis service is temporarily unavailable. Please try again in a few minutes. This is likely a temporary Google AI service outage.`
+    };
+  }
 }

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 import { getIpSecurityScore } from "@/app/actions";
 import { cn } from "@/lib/utils";
 import type { IpAddressSecurityScoringOutput } from "@/ai/flows/ip-address-security-scoring";
@@ -39,6 +40,7 @@ export default function ScoreboardPage() {
   const [scoredIPs, setScoredIPs] = useState<ScoredIP[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("manual");
+  const { toast } = useToast();
 
   // Auto-analyze recent threat IPs on component mount
   useEffect(() => {
@@ -93,8 +95,34 @@ export default function ScoreboardPage() {
 
       setScoredIPs(prev => [newScoredIP, ...prev.slice(0, 19)]); // Keep last 20 results
       setIpInput("");
-    } catch (err) {
-      setError("Failed to analyze IP address. Please try again.");
+      
+      // Show a warning if service was unavailable
+      if (result.securityScore === 'service-unavailable' || result.securityScore === 'neutral') {
+        toast({
+          title: "Service Temporarily Unavailable",
+          description: "AI analysis service is currently unavailable. Showing neutral assessment - please try again later.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Analysis Complete",
+          description: `IP ${ipInput.trim()} has been analyzed successfully.`,
+        });
+      }
+    } catch (err: any) {
+      if (err.message?.includes('503') || err.message?.includes('Service Unavailable')) {
+        toast({
+          title: "Service Unavailable",
+          description: "AI analysis service is temporarily unavailable. This is likely a Google AI service outage - please try again in a few minutes.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Analysis Failed",
+          description: "Failed to analyze IP address. Please check your connection and try again.",
+          variant: "destructive",
+        });
+      }
       console.error("IP analysis error:", err);
     } finally {
       setLoading(false);
@@ -108,15 +136,24 @@ export default function ScoreboardPage() {
   };
 
   const getRiskLevel = (securityScore: string) => {
-    return securityScore.toLowerCase() === "safe" ? "safe" : "unsafe";
+    const score = securityScore.toLowerCase();
+    if (score === "safe") return "safe";
+    if (score === "neutral" || score === "service-unavailable") return "neutral";
+    return "unsafe";
   };
 
   const getRiskColor = (securityScore: string) => {
-    return securityScore.toLowerCase() === "safe" ? "bg-green-500" : "bg-red-500";
+    const score = securityScore.toLowerCase();
+    if (score === "safe") return "bg-green-500";
+    if (score === "neutral" || score === "service-unavailable") return "bg-yellow-500";
+    return "bg-red-500";
   };
 
   const getRiskIcon = (securityScore: string) => {
-    return securityScore.toLowerCase() === "safe" ? CheckCircle : AlertTriangle;
+    const score = securityScore.toLowerCase();
+    if (score === "safe") return CheckCircle;
+    if (score === "neutral" || score === "service-unavailable") return AlertTriangle;
+    return AlertTriangle;
   };
 
   const getSourceBadge = (source: string) => {

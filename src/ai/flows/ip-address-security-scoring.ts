@@ -114,7 +114,18 @@ const ipAddressSecurityScoringFlow = ai.defineFlow(
     outputSchema: IpAddressSecurityScoringOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return output!;
+    try {
+      const {output} = await prompt(input);
+      return output!;
+    } catch (error: any) {
+      console.error('AI Service Error:', error.message);
+      
+      // Provide fallback response when AI service is unavailable
+      return {
+        securityScore: 'neutral',
+        dangerScore: 50, // Neutral score when service unavailable
+        analysisDetails: 'AI analysis service is temporarily unavailable. This IP cannot be properly analyzed at the moment. Please try again later for detailed security analysis.'
+      };
+    }
   }
 );
