@@ -465,7 +465,6 @@ class PacketMonitor {
       });
       
       this.tsharkProcess.on('close', (code) => {
-        console.log(`Tshark process exited with code ${code}`);
         this.isMonitoring = false;
       });
       
@@ -474,7 +473,6 @@ class PacketMonitor {
         this.emitError(`Tshark error: ${error.message}`);
       });
       
-      console.log('✅ Tshark packet capture started successfully');
     } catch (error) {
       console.error('Failed to start tshark:', error);
       this.emitError(`Failed to start tshark: ${error.message}`);
@@ -503,8 +501,6 @@ class PacketMonitor {
     }
     
     args.push(filter);
-
-    console.log('🔧 Starting tcpdump with filter:', filter);
     
     try {
       this.tcpdumpProcess = spawn('tcpdump', args);
