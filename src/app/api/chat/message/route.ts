@@ -188,6 +188,7 @@ function queryPacketDatabase(userMessage: string): string {
   return packetContext;
 }
 
+
 // Generate conversation title using AI
 async function generateConversationTitle(firstUserMessage: string): Promise<string> {
   try {
@@ -266,6 +267,25 @@ async function generateAIResponse(userMessage: string, conversationHistory: any[
       contextualInfo += dbContext;
     }
 
+    // Check if user is requesting web search
+    const lowerMessage = userMessage.toLowerCase();
+    const requestingWebSearch = lowerMessage.includes('search in the web') || 
+                               lowerMessage.includes('search on the web') ||
+                               lowerMessage.includes('web search') ||
+                               lowerMessage.includes('online search') ||
+                               lowerMessage.includes('search web') ||
+                               (lowerMessage.includes('search') && (lowerMessage.includes('internet') || lowerMessage.includes('online')));
+
+    // Add web search instruction for Gemini if requested
+    if (requestingWebSearch) {
+      contextualInfo += '\n\n**🌐 CRITICAL WEB SEARCH REQUEST 🌐**: The user has explicitly requested web search. You MUST use your built-in web search capabilities to find current, real-time information from the internet. Do NOT rely only on internal knowledge. Search the web NOW for current threat intelligence, IP reputation, and security information.';
+      
+      // If IP address is present, add specific search instructions
+      if (ips && ips.length > 0) {
+        contextualInfo += `\n\n**IP Web Search Required**: Search the web for current reputation, threat intelligence, geolocation, and blacklist status of IP ${ips[0]}. Check multiple threat intelligence sources online.`;
+      }
+    }
+
     // Get packet database context for network-related queries
     const packetContext = queryPacketDatabase(userMessage);
     contextualInfo += packetContext;
@@ -295,6 +315,7 @@ async function generateAIResponse(userMessage: string, conversationHistory: any[
 - Database query insights and statistics
 - Network packet analysis and traffic monitoring
 - Real-time network security data interpretation
+- Web-based threat intelligence and reputation checking
 
 **Your Personality:**
 - Professional but approachable
@@ -326,16 +347,35 @@ You have access to multiple databases:
    - Attack patterns in captured traffic
    - Real-time network security statistics
 
-Use the provided database context to give accurate, data-driven responses.
+3. **Web Search Capability** - You have access to real-time web search:
+   - When users request web searches, use your built-in search capabilities
+   - Look up IP reputation and threat intelligence from current web sources
+   - Find real-time security information from the internet
+   - Access current threat landscape and attack patterns
+   - Query public blacklist and reputation databases online
+   - Search online security resources and documentation
 
-**Instructions:**
+Use the provided database context and perform web searches when requested to give accurate, data-driven responses.
+
+**CRITICAL INSTRUCTIONS:**
 1. Analyze the user's security question or concern
-2. Provide comprehensive, actionable guidance
-3. Use markdown formatting with headers, bullet points, and emphasis
-4. Include specific examples or recommendations when relevant
-5. If discussing IP addresses, incorporate any provided analysis data
-6. When database context is provided, reference specific data points
-7. Always prioritize practical security value in your response
+2. **🌐 WEB SEARCH MANDATE 🌐**: If you see "🌐 CRITICAL WEB SEARCH REQUEST 🌐" in the context, this means the user has explicitly requested web search. You MUST:
+   - Use your built-in web search functionality immediately
+   - Search the internet for current, real-time information
+   - Do NOT rely only on your training data or internal knowledge
+   - Find current threat intelligence, IP reputation, and security data from the web
+   - Include web search results in your response
+3. For IP addresses with web search requests:
+   - Search for current IP reputation from multiple online sources
+   - Look up recent threat intelligence and blacklist status
+   - Find geolocation and ISP information
+   - Check for recent malicious activity reports
+4. Present web search findings clearly with sources when possible
+5. Provide comprehensive, actionable guidance combining web search results with your analysis
+6. Use markdown formatting with headers, bullet points, and emphasis
+7. Include specific examples or recommendations when relevant
+8. When database context is provided, reference specific data points
+9. Always prioritize practical security value in your response
 
 Respond as NetGuardian with helpful, expert-level security guidance based on available data.`,
       model: 'googleai/gemini-2.5-flash',
