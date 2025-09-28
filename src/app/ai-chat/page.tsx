@@ -145,7 +145,32 @@ export default function AIChatPage() {
         // Reload conversations from database to ensure sync
         await loadChatHistory();
       } else {
-        console.error("Failed to send message");
+        console.error("Failed to send message, status:", response.status);
+        
+        // Try to get error details from response
+        let errorMessage = "Failed to send message";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          // Ignore JSON parsing errors
+        }
+        
+        // Add error message to conversation
+        const errorMessage2: Message = {
+          id: `msg_${Date.now()}_error`,
+          content: `⚠️ **Error**: ${errorMessage}. Please try again.`,
+          role: "assistant",
+          timestamp: new Date(),
+        };
+
+        const errorConversation = {
+          ...updatedConversation,
+          messages: [...updatedConversation.messages, errorMessage2],
+          updatedAt: new Date(),
+        };
+
+        setCurrentConversation(errorConversation);
       }
     } catch (error) {
       console.error("Error sending message:", error);

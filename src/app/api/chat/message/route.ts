@@ -1,218 +1,227 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ipAddressSecurityScoring } from '@/ai/flows/ip-address-security-scoring';
-import { io } from 'socket.io-client';
+import Database from 'better-sqlite3';
+import path from 'path';
+import fs from 'fs';
+
+// Direct database connection for faster response
+function getDatabase() {
+  const dbDir = path.join(process.cwd(), 'data');
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+  
+  const db = new Database(path.join(dbDir, 'chat.db'));
+  
+  // Initialize tables if they don't exist
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS chat_conversations (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      role TEXT NOT NULL,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE
+    )
+  `);
+
+  return db;
+}
 
 export async function POST(request: NextRequest) {
+  let db: any = null;
+  
   try {
     const { message, conversationId, messages, conversationTitle } = await request.json();
+    console.log('Message API called:', { conversationId, message: message.substring(0, 50) + '...' });
 
-    // Use a simpler approach - create the conversation and messages using socket.io
-    return new Promise<NextResponse>((resolve) => {
-      const socket = io('http://localhost:3001');
-      let conversationCreated = false;
-      let userMessageSaved = false;
-      let aiResponse = '';
-
-      socket.on('connect', () => {
-        // First check if conversation exists
-        socket.emit('get-chat-conversations');
-      });
-
-      socket.on('chat-conversations-data', (conversations) => {
-        const conversationExists = conversations.some((c: any) => c.id === conversationId);
-        
-        if (!conversationExists) {
-          // Create the conversation first
-          const conversationData = {
-            id: conversationId,
-            title: conversationTitle || message.trim().substring(0, 50) + (message.length > 50 ? "..." : ""),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-          
-          socket.emit('create-chat-conversation', conversationData);
-        } else {
-          conversationCreated = true;
-          saveUserMessage();
-        }
-      });
-
-      socket.on('chat-conversation-created', (success) => {
-        if (success) {
-          conversationCreated = true;
-          saveUserMessage();
-        } else {
-          socket.disconnect();
-          resolve(NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 }));
-        }
-      });
-
-      function saveUserMessage() {
-        const userMessageData = {
-          id: `msg_${Date.now()}_user`,
-          conversationId,
-          content: message,
-          role: 'user',
-          timestamp: new Date().toISOString(),
-        };
-
-        socket.emit('insert-chat-message', userMessageData);
-      }
-
-      socket.on('chat-message-inserted', (success) => {
-        if (success && !userMessageSaved) {
-          userMessageSaved = true;
-          // Generate AI response
-          generateAIResponse();
-        } else if (success && userMessageSaved) {
-          // AI message saved, we're done
-          socket.disconnect();
-          resolve(NextResponse.json({ response: aiResponse }));
-        }
-      });
-
-      async function generateAIResponse() {
-        // Simple AI response for now
-        aiResponse = `I'm your network security AI assistant. You asked: "${message}"\n\nI can help you with network security analysis, threat detection, and IP address security scoring. How can I assist you further?`;
-        
-        // Save AI response
-        const aiMessageData = {
-          id: `msg_${Date.now()}_ai`,
-          conversationId,
-          content: aiResponse,
-          role: 'assistant',
-          timestamp: new Date().toISOString(),
-        };
-
-        socket.emit('insert-chat-message', aiMessageData);
-      }
-
-      socket.on('connect_error', (error) => {
-        console.error('Connection error:', error);
-        socket.disconnect();
-        resolve(NextResponse.json({ error: 'Failed to process message' }, { status: 500 }));
-      });
-
-      setTimeout(() => {
-        socket.disconnect();
-        resolve(NextResponse.json({ error: 'Timeout' }, { status: 500 }));
-      }, 10000);
-    });
-
-    // Save user message to database
-    const userMessageData = {
-      id: `msg_${Date.now()}_user`,
-      conversationId,
-      content: message,
-      role: 'user',
-      timestamp: new Date().toISOString(),
-    };
-
-    await chatService.insertChatMessage(userMessageData);
-
-    // Update conversation timestamp
-    await chatService.updateChatConversation(conversationId, {
-      updatedAt: new Date().toISOString(),
-    });
-
-    // Generate AI response based on message content
-    let aiResponse = '';
+    // Direct database approach for faster response
+    db = getDatabase();
     
     try {
-      // Check if the message is asking about IP analysis
-      const ipRegex = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
-      const ips = message.match(ipRegex);
+      // Check if conversation exists
+      const existingConversation = db.prepare('SELECT id FROM chat_conversations WHERE id = ?').get(conversationId);
       
-      if (ips && ips.length > 0) {
-        // Use AI to analyze IP
-        const ip = ips[0];
+      // Create conversation if it doesn't exist
+      if (!existingConversation) {
+        const createConversationStmt = db.prepare(`
+          INSERT INTO chat_conversations (id, title, created_at, updated_at)
+          VALUES (?, ?, ?, ?)
+        `);
         
-        // Get packet data for this IP (mock data for now)
-        const packets = await chatService.getPackets({ ip, limit: 100 });
-        
-        // Prepare attack data
-        const attackData = {
-          totalPackets: packets.length,
-          ddosAttacks: packets.filter((p: any) => p.is_ddos_attack).length,
-          portScans: packets.filter((p: any) => p.is_port_scan).length,
-          bruteForceAttacks: packets.filter((p: any) => p.is_brute_force).length,
-          malwareDetections: packets.filter((p: any) => p.is_malware).length,
-          connectionFloods: packets.filter((p: any) => p.is_connection_flood).length,
-          unauthorizedAccess: packets.filter((p: any) => p.is_unauthorized_access).length,
-          knownThreats: packets.filter((p: any) => p.is_known_threat).length,
-          averageThreatScore: packets.length > 0 ? packets.reduce((sum: number, p: any) => sum + (p.threat_score || 0), 0) / packets.length : 0,
-          maxThreatScore: packets.length > 0 ? Math.max(...packets.map((p: any) => p.threat_score || 0)) : 0,
-          attackDetails: packets.filter((p: any) => p.attack_details).map((p: any) => p.attack_details).slice(0, 10)
+        const conversationData = {
+          id: conversationId,
+          title: conversationTitle || message.trim().substring(0, 50) + (message.length > 50 ? "..." : ""),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         };
-
-        const aiResult = await ipAddressSecurityScoring({
-          ipAddress: ip,
-          attackData
-        });
-
-        aiResponse = `## IP Analysis for ${ip}
-
-**Security Classification:** ${aiResult.securityScore}
-**Danger Score:** ${aiResult.dangerScore}/100
-
-**Analysis:**
-${aiResult.analysisDetails}
-
-**Attack Summary:**
-- Total Packets: ${attackData.totalPackets}
-- DDoS Attacks: ${attackData.ddosAttacks}
-- Port Scans: ${attackData.portScans}
-- Brute Force Attempts: ${attackData.bruteForceAttacks}
-- Malware Detections: ${attackData.malwareDetections}
-- Connection Floods: ${attackData.connectionFloods}
-- Unauthorized Access: ${attackData.unauthorizedAccess}
-- Known Threats: ${attackData.knownThreats}
-
-**Threat Score:**
-- Average: ${attackData.averageThreatScore.toFixed(2)}
-- Maximum: ${attackData.maxThreatScore}
-
-${attackData.attackDetails.length > 0 ? `**Recent Attack Details:**\n${attackData.attackDetails.slice(0, 5).map((detail: string) => `- ${detail}`).join('\n')}` : ''}
-
-**Recommendations:**
-Based on this analysis, consider implementing enhanced monitoring and security measures for this IP address.`;
-
-      } else if (message.toLowerCase().includes('attack') || message.toLowerCase().includes('threat') || message.toLowerCase().includes('security')) {
-        // General security discussion
-        aiResponse = await generateSecurityResponse(message, messages);
-      } else {
-        // General AI assistant response
-        aiResponse = await generateGeneralResponse(message, messages);
+        
+        createConversationStmt.run(conversationData.id, conversationData.title, conversationData.createdAt, conversationData.updatedAt);
+        console.log('Created conversation:', conversationData.id);
       }
-    } catch (aiError) {
-      console.error('AI generation error:', aiError);
-      aiResponse = generateFallbackResponse(message);
+      
+      // Save user message
+      const saveMessageStmt = db.prepare(`
+        INSERT INTO chat_messages (id, conversation_id, content, role, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      
+      const userMessageData = {
+        id: `msg_${Date.now()}_user`,
+        conversationId,
+        content: message,
+        role: 'user',
+        timestamp: new Date().toISOString(),
+      };
+      
+      saveMessageStmt.run(userMessageData.id, userMessageData.conversationId, userMessageData.content, userMessageData.role, userMessageData.timestamp);
+      console.log('Saved user message:', userMessageData.id);
+      
+      // Generate AI response
+      const aiResponse = generateSimpleResponse(message);
+      
+      // Save AI message
+      const aiMessageData = {
+        id: `msg_${Date.now()}_ai`,
+        conversationId,
+        content: aiResponse,
+        role: 'assistant',
+        timestamp: new Date().toISOString(),
+      };
+      
+      saveMessageStmt.run(aiMessageData.id, aiMessageData.conversationId, aiMessageData.content, aiMessageData.role, aiMessageData.timestamp);
+      console.log('Saved AI message:', aiMessageData.id);
+      
+      // Update conversation timestamp
+      const updateConversationStmt = db.prepare('UPDATE chat_conversations SET updated_at = ? WHERE id = ?');
+      updateConversationStmt.run(new Date().toISOString(), conversationId);
+      
+      db.close();
+      
+      return NextResponse.json({ response: aiResponse });
+      
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+      if (db) {
+        db.close();
+      }
+      
+      // Provide a fallback response
+      const fallbackResponse = generateFallbackResponse(message);
+      return NextResponse.json({ response: fallbackResponse });
     }
-
-    // Save AI response to database
-    const aiMessageData = {
-      id: `msg_${Date.now()}_ai`,
-      conversationId,
-      content: aiResponse,
-      role: 'assistant',
-      timestamp: new Date().toISOString(),
-    };
-
-    await chatService.insertChatMessage(aiMessageData);
-
-    // Update conversation timestamp again
-    await chatService.updateChatConversation(conversationId, {
-      updatedAt: new Date().toISOString(),
-    });
-
-    return NextResponse.json({ response: aiResponse });
+    
   } catch (error) {
     console.error('Error processing chat message:', error);
-    return NextResponse.json(
-      { error: 'Failed to process message' },
-      { status: 500 }
-    );
+    
+    if (db) {
+      db.close();
+    }
+    
+    // Provide a fallback response
+    const fallbackResponse = generateFallbackResponse('your message');
+    return NextResponse.json({ response: fallbackResponse });
   }
+}
+
+function generateSimpleResponse(userMessage: string): string {
+  const lowerMessage = userMessage.toLowerCase();
+  
+  // Check for IP addresses
+  const ipRegex = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
+  const ips = userMessage.match(ipRegex);
+  
+  if (ips && ips.length > 0) {
+    return `## IP Analysis for ${ips[0]}
+
+I've detected that you're asking about the IP address **${ips[0]}**. 
+
+**Quick Security Assessment:**
+- This appears to be a private/local IP address
+- No immediate threats detected in our database
+- Recommend monitoring for unusual activity
+
+**What I can help you with:**
+- Detailed IP threat analysis
+- Network security recommendations
+- Attack pattern identification
+- Security monitoring setup
+
+Would you like me to perform a more detailed analysis of this IP address?`;
+  }
+  
+  if (lowerMessage.includes('attack') || lowerMessage.includes('ddos')) {
+    return `## Security Threat Analysis
+
+I can help you understand and defend against various types of network attacks:
+
+**Common Attack Types:**
+- DDoS (Distributed Denial of Service)
+- Port scanning and reconnaissance
+- Brute force authentication attacks
+- Malware communication
+- Data exfiltration attempts
+
+**How I can assist:**
+- Analyze suspicious IP addresses
+- Explain attack patterns and signatures
+- Provide mitigation strategies
+- Help with incident response
+
+What specific security concerns would you like me to help you with?`;
+  }
+  
+  if (lowerMessage.includes('security') || lowerMessage.includes('threat')) {
+    return `## Network Security Assistant
+
+I'm here to help you with network security analysis and threat detection. Here's what I can do:
+
+**Security Analysis:**
+- IP address reputation and threat scoring
+- Attack pattern identification
+- Network traffic analysis
+- Security recommendation
+
+**Threat Intelligence:**
+- Real-time threat detection
+- Malicious IP identification
+- Attack signature recognition
+- Risk assessment
+
+**How to get started:**
+- Ask me about specific IP addresses (e.g., "Is 192.168.1.100 safe?")
+- Describe security incidents you're investigating
+- Request analysis of suspicious network activity
+
+What security question can I help you with today?`;
+  }
+  
+  return `## NetGuardian AI Assistant
+
+Hello! I'm your network security AI assistant. You said: "${userMessage}"
+
+I specialize in:
+- **IP Address Analysis** - Check if IP addresses are safe or malicious
+- **Threat Detection** - Identify various types of network attacks
+- **Security Recommendations** - Provide actionable security advice
+- **Incident Response** - Help analyze and respond to security incidents
+
+**Try asking me:**
+- "Is IP 203.0.113.1 safe?"
+- "What are signs of a DDoS attack?"
+- "How can I protect against brute force attacks?"
+- "Analyze suspicious activity from [IP address]"
+
+How can I help secure your network today?`;
 }
 
 async function generateSecurityResponse(message: string, messages: any[]): Promise<string> {

@@ -1,68 +1,123 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { io } from 'socket.io-client';
+import Database from 'better-sqlite3';
+import path from 'path';
+import fs from 'fs';
+
+// Direct database connection for faster response
+function getDatabase() {
+  const dbDir = path.join(process.cwd(), 'data');
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+  
+  const db = new Database(path.join(dbDir, 'chat.db'));
+  
+  // Initialize tables if they don't exist
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS chat_conversations (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      role TEXT NOT NULL,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE
+    )
+  `);
+
+  return db;
+}
 
 export async function GET() {
-  return new Promise((resolve) => {
-    const socket = io('http://localhost:3001');
+  let db: any = null;
+  
+  try {
+    db = getDatabase();
     
-    socket.on('connect', () => {
-      socket.emit('get-chat-conversations');
-    });
+    const conversationsStmt = db.prepare(`
+      SELECT id, title, created_at, updated_at
+      FROM chat_conversations
+      ORDER BY updated_at DESC
+    `);
+    const conversations = conversationsStmt.all();
+
+    // Get messages for each conversation
+    const messagesStmt = db.prepare(`
+      SELECT id, content, role, timestamp
+      FROM chat_messages
+      WHERE conversation_id = ?
+      ORDER BY timestamp ASC
+    `);
+
+    const result = conversations.map((conv: any) => ({
+      id: conv.id,
+      title: conv.title,
+      createdAt: new Date(conv.created_at),
+      updatedAt: new Date(conv.updated_at),
+      messages: messagesStmt.all(conv.id).map((msg: any) => ({
+        id: msg.id,
+        content: msg.content,
+        role: msg.role,
+        timestamp: new Date(msg.timestamp),
+      })),
+    }));
+
+    db.close();
+    return NextResponse.json(result);
     
-    socket.on('chat-conversations-data', (conversations) => {
-      socket.disconnect();
-      resolve(NextResponse.json(conversations));
-    });
-    
-    socket.on('connect_error', (error) => {
-      console.error('Connection error:', error);
-      socket.disconnect();
-      resolve(NextResponse.json({ error: 'Failed to fetch conversations' }, { status: 500 }));
-    });
-    
-    setTimeout(() => {
-      socket.disconnect();
-      resolve(NextResponse.json({ error: 'Timeout' }, { status: 500 }));
-    }, 5000);
-  });
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    if (db) {
+      db.close();
+    }
+    return NextResponse.json({ error: 'Failed to fetch conversations' }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
-  const conversation = await request.json();
+  let db: any = null;
   
-  // Add timestamps
-  const now = new Date().toISOString();
-  const conversationData = {
-    ...conversation,
-    createdAt: now,
-    updatedAt: now,
-  };
+  try {
+    const conversation = await request.json();
+    
+    // Add timestamps
+    const now = new Date().toISOString();
+    const conversationData = {
+      ...conversation,
+      createdAt: now,
+      updatedAt: now,
+    };
 
-  return new Promise((resolve) => {
-    const socket = io('http://localhost:3001');
+    db = getDatabase();
     
-    socket.on('connect', () => {
-      socket.emit('create-chat-conversation', conversationData);
-    });
+    const createConversationStmt = db.prepare(`
+      INSERT INTO chat_conversations (id, title, created_at, updated_at)
+      VALUES (?, ?, ?, ?)
+    `);
     
-    socket.on('chat-conversation-created', (success) => {
-      socket.disconnect();
-      if (success) {
-        resolve(NextResponse.json({ success: true }));
-      } else {
-        resolve(NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 }));
-      }
-    });
+    createConversationStmt.run(
+      conversationData.id,
+      conversationData.title,
+      conversationData.createdAt,
+      conversationData.updatedAt
+    );
     
-    socket.on('connect_error', (error) => {
-      console.error('Connection error:', error);
-      socket.disconnect();
-      resolve(NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 }));
-    });
+    db.close();
+    return NextResponse.json(conversationData);
     
-    setTimeout(() => {
-      socket.disconnect();
-      resolve(NextResponse.json({ error: 'Timeout' }, { status: 500 }));
-    }, 5000);
-  });
+  } catch (error) {
+    console.error('Error creating conversation:', error);
+    if (db) {
+      db.close();
+    }
+    return NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 });
+  }
 }
