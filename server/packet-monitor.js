@@ -342,16 +342,12 @@ class PacketMonitor {
         this.attackDetection.localIPs.add(`${networkBaseStr}.1`);    // Common gateway
         this.attackDetection.localIPs.add(`${networkBaseStr}.254`);  // Common gateway
         this.attackDetection.localIPs.add(`${networkBaseStr}.238`);  // Your specific gateway
-        
-        console.log(`🛡️  Added network ${networkBaseStr}.x to trusted IPs`);
       }
     });
     
     // Add common local network ranges
     this.attackDetection.localIPs.add('127.0.0.1');
     this.attackDetection.localIPs.add('localhost');
-    
-    console.log('🛡️  Protected IPs:', Array.from(this.attackDetection.localIPs));
     
     // Clean up tracking data every 30 seconds
     setInterval(() => {
@@ -390,8 +386,6 @@ class PacketMonitor {
     
     this.isMonitoring = true;
     this.selectedInterface = options.interface || this.getDefaultInterface();
-    
-    console.log(`🚀 Starting real packet capture on interface: ${this.selectedInterface}`);
     
     if (this.hasTshark) {
       this.startTsharkCapture(options);
