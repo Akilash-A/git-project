@@ -5,12 +5,13 @@ import Link from "next/link";
 import {
   Shield,
   Home,
-  ListChecks,
-  BarChart3,
+  ShieldCheck,
+  Search,
   Settings,
   Archive,
   Brain,
   Network,
+  CheckCircle,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 
@@ -59,7 +60,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   pathname === "/whitelist" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
                 )}
               >
-                <ListChecks className="h-5 w-5" />
+                <ShieldCheck className="h-5 w-5" />
                 <span className="sr-only">Whitelist</span>
               </Link>
             </TooltipTrigger>
@@ -115,7 +116,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   pathname === "/security-analysis" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
                 )}
               >
-                <BarChart3 className="h-5 w-5" />
+                <Search className="h-5 w-5" />
                 <span className="sr-only">Security Analysis</span>
               </Link>
             </TooltipTrigger>
