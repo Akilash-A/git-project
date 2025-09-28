@@ -448,7 +448,12 @@ export async function POST(request: NextRequest) {
       // Generate AI response using Google AI with database access and conversation history
       const aiResponse = await generateAIResponse(message, messages || [], db);
       
-      // Save AI message
+      // Save AI message with separate prepared statement
+      const saveAIMessageStmt = db.prepare(`
+        INSERT INTO chat_messages (id, conversation_id, content, role, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      
       const aiMessageData = {
         id: `msg_${Date.now()}_ai`,
         conversationId,
@@ -457,7 +462,13 @@ export async function POST(request: NextRequest) {
         timestamp: new Date().toISOString(),
       };
       
-      saveMessageStmt.run(aiMessageData.id, aiMessageData.conversationId, aiMessageData.content, aiMessageData.role, aiMessageData.timestamp);
+      // Ensure conversation exists before saving AI message
+      const verifyConversation = db.prepare('SELECT id FROM chat_conversations WHERE id = ?').get(conversationId);
+      if (!verifyConversation) {
+        throw new Error(`Conversation ${conversationId} not found when saving AI message`);
+      }
+      
+      saveAIMessageStmt.run(aiMessageData.id, aiMessageData.conversationId, aiMessageData.content, aiMessageData.role, aiMessageData.timestamp);
       console.log('Saved AI message:', aiMessageData.id);
       
       // Update conversation timestamp

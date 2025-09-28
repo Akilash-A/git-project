@@ -64,8 +64,36 @@ function TypeWriter({ text, speed = 30, onComplete }: TypeWriterProps) {
   useEffect(() => {
     if (currentIndex < text.length) {
       const timer = setTimeout(() => {
-        setDisplayText(prev => prev + text[currentIndex]);
-        setCurrentIndex(prev => prev + 1);
+        // Default: move one character forward
+        let newIndex = currentIndex + 1;
+        let charsToAdd = 1;
+        
+        // Handle specific markdown patterns more carefully
+        const remainingText = text.slice(currentIndex);
+        const currentChar = text[currentIndex];
+        
+        // Only complete small markdown patterns, not entire lines
+        if (currentChar === '*') {
+          // Check if it's the start of bold (**) or italic (*)
+          if (remainingText.startsWith('**')) {
+            // For bold, add the opening ** but continue typing normally
+            if (currentIndex === 0 || text[currentIndex - 1] === ' ' || text[currentIndex - 1] === '\n') {
+              charsToAdd = 2; // Add both asterisks
+            }
+          }
+        }
+        
+        // Handle closing markdown patterns
+        if (currentChar === '*' && currentIndex > 0) {
+          const prevChar = text[currentIndex - 1];
+          if (prevChar !== '*' && remainingText.startsWith('**')) {
+            charsToAdd = 2; // Complete closing **
+          }
+        }
+        
+        newIndex = currentIndex + charsToAdd;
+        setDisplayText(text.slice(0, newIndex));
+        setCurrentIndex(newIndex);
       }, speed);
 
       return () => clearTimeout(timer);
@@ -106,9 +134,27 @@ function TypeWriter({ text, speed = 30, onComplete }: TypeWriterProps) {
             }
             return <p className="mb-2 last:mb-0 text-foreground leading-relaxed">{children}</p>;
           },
-          ul: ({children}) => <ul className="list-disc list-inside mb-3 space-y-1 pl-2">{children}</ul>,
-          ol: ({children}) => <ol className="list-decimal list-inside mb-3 space-y-1 pl-2">{children}</ol>,
-          li: ({children}) => <li className="text-sm text-foreground leading-relaxed">{children}</li>,
+          ul: ({children, ...props}) => {
+            const level = (props as any).level || 0;
+            return (
+              <ul className={`list-disc mb-3 space-y-1 ${level === 0 ? 'pl-6' : 'pl-4'} ml-0`}>
+                {children}
+              </ul>
+            );
+          },
+          ol: ({children, ...props}) => {
+            const level = (props as any).level || 0;
+            return (
+              <ol className={`list-decimal mb-3 space-y-1 ${level === 0 ? 'pl-6' : 'pl-4'} ml-0`}>
+                {children}
+              </ol>
+            );
+          },
+          li: ({children}) => (
+            <li className="text-sm text-foreground leading-relaxed mb-1">
+              <div className="pl-2">{children}</div>
+            </li>
+          ),
           strong: ({children}) => <strong className="font-semibold text-foreground">{children}</strong>,
           em: ({children}) => <em className="italic text-foreground">{children}</em>,
           code: ({children}) => <code className="bg-accent/20 px-1.5 py-0.5 rounded text-xs font-mono text-foreground border">{children}</code>,
