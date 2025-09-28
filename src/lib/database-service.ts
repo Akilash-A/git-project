@@ -276,7 +276,7 @@ class DatabaseService {
     this.socket.emit('stop-monitoring');
   }
 
-  // Chat operations
+  // Chat operations - now uses separate chat.db database
   async getChatConversations(): Promise<any[]> {
     return new Promise((resolve) => {
       if (!this.socket) {
