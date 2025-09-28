@@ -185,9 +185,7 @@ export default function AIChatPage() {
       if (response.ok) {
         const data = await response.json();
         setConversations(data);
-        if (data.length > 0 && !currentConversation) {
-          setCurrentConversation(data[0]);
-        }
+        // Don't auto-select any conversation - let user choose or start new chat
       }
     } catch (error) {
       console.error("Failed to load chat history:", error);
