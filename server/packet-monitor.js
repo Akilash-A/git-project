@@ -1603,7 +1603,6 @@ class PacketMonitor {
     if (this.cyclicIntervals[intervalKey]) {
       clearInterval(this.cyclicIntervals[intervalKey]);
       delete this.cyclicIntervals[intervalKey];
-      console.log(`🛑 Stopped cyclic throttling for ${ip}`);
     }
   }
 
@@ -1876,7 +1875,6 @@ class PacketMonitor {
       // Wait a bit for cleanup to complete, then apply new rules
       setTimeout(() => {
         const blockedIps = this.database.getActiveBlockedIps();
-        console.log(`🛡️ Applying system-level blocking for ${blockedIps.length} IPs...`);
         
         blockedIps.forEach(ip => {
           this.applySystemLevelTrafficControl(ip, 'block');
@@ -1884,7 +1882,6 @@ class PacketMonitor {
         
         // Also apply throttling rules
         const throttledIps = this.database.getActiveThrottledIps();
-        console.log(`⏱️ Applying system-level throttling for ${throttledIps.length} IPs...`);
         throttledIps.forEach(({ip, delay}) => {
           this.applySystemLevelTrafficControl(ip, 'throttle', delay);
         });
