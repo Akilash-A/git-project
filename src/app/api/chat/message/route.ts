@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ipAddressSecurityScoring } from '@/ai/flows/ip-address-security-scoring';
+import { ai } from '@/ai/genkit';
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
@@ -35,6 +36,82 @@ function getDatabase() {
   `);
 
   return db;
+}
+
+// AI response generation using Google AI
+async function generateAIResponse(userMessage: string): Promise<string> {
+  try {
+    // Check if the message contains an IP address for specific analysis
+    const ipRegex = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
+    const ips = userMessage.match(ipRegex);
+    
+    let contextualInfo = '';
+    if (ips && ips.length > 0) {
+      try {
+        // Get IP security analysis
+        const ipAnalysis = await ipAddressSecurityScoring({
+          ipAddress: ips[0],
+          attackData: {
+            totalPackets: 0,
+            ddosAttacks: 0,
+            portScans: 0,
+            bruteForceAttacks: 0,
+            malwareDetections: 0,
+            connectionFloods: 0,
+            unauthorizedAccess: 0,
+            knownThreats: 0,
+            averageThreatScore: 0,
+            maxThreatScore: 0,
+            attackDetails: []
+          }
+        });
+        
+        contextualInfo = `\n\n**IP Analysis Context:**\nIP ${ips[0]} has a danger score of ${ipAnalysis.dangerScore}/100 and is classified as ${ipAnalysis.securityScore}. ${ipAnalysis.analysisDetails}`;
+      } catch (error) {
+        console.error('Error getting IP analysis:', error);
+      }
+    }
+
+    const response = await ai.generate({
+      prompt: `You are NetGuardian, an advanced AI security assistant specializing in network security, threat analysis, and cybersecurity guidance.
+
+**Your Expertise:**
+- Network security analysis and threat detection
+- IP address reputation and risk assessment  
+- Attack pattern identification (DDoS, port scanning, brute force, malware)
+- Security incident response and mitigation strategies
+- Network monitoring and defense recommendations
+- Cybersecurity best practices and implementation
+
+**Your Personality:**
+- Professional but approachable
+- Provide actionable, practical advice
+- Use clear explanations with technical depth when appropriate
+- Format responses with markdown for better readability
+- Focus on real-world security implications
+
+**User Message:** ${userMessage}
+
+${contextualInfo}
+
+**Instructions:**
+1. Analyze the user's security question or concern
+2. Provide comprehensive, actionable guidance
+3. Use markdown formatting with headers, bullet points, and emphasis
+4. Include specific examples or recommendations when relevant
+5. If discussing IP addresses, incorporate any provided analysis data
+6. Always prioritize practical security value in your response
+
+Respond as NetGuardian with helpful, expert-level security guidance.`,
+      model: 'googleai/gemini-2.5-flash',
+    });
+
+    return response.text;
+  } catch (error) {
+    console.error('Error generating AI response:', error);
+    // Fall back to simple response if AI fails
+    return generateSimpleResponse(userMessage);
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -86,8 +163,8 @@ export async function POST(request: NextRequest) {
       saveMessageStmt.run(userMessageData.id, userMessageData.conversationId, userMessageData.content, userMessageData.role, userMessageData.timestamp);
       console.log('Saved user message:', userMessageData.id);
       
-      // Generate AI response
-      const aiResponse = generateSimpleResponse(message);
+      // Generate AI response using Google AI
+      const aiResponse = await generateAIResponse(message);
       
       // Save AI message
       const aiMessageData = {
@@ -116,7 +193,7 @@ export async function POST(request: NextRequest) {
       }
       
       // Provide a fallback response
-      const fallbackResponse = generateFallbackResponse(message);
+      const fallbackResponse = generateSimpleResponse(message);
       return NextResponse.json({ response: fallbackResponse });
     }
     
@@ -128,7 +205,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Provide a fallback response
-    const fallbackResponse = generateFallbackResponse('your message');
+    const fallbackResponse = generateSimpleResponse('your message');
     return NextResponse.json({ response: fallbackResponse });
   }
 }
