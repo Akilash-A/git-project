@@ -368,7 +368,7 @@ export default function AIChatPage() {
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              <MessageSquare className="h-5 w-5" />
+              <Sparkles className="h-5 w-5" />
               AI Security Chat
             </h2>
             <Button onClick={startNewConversation} size="sm">
@@ -628,7 +628,7 @@ export default function AIChatPage() {
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <MessageSquare className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+              <Sparkles className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
               <h2 className="text-2xl font-semibold mb-2">AI Security Assistant</h2>
               <p className="text-muted-foreground mb-6 max-w-md">
                 Start a new conversation or select an existing one to chat with AI about network security, threats, and analysis.

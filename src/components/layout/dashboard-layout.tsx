@@ -12,6 +12,7 @@ import {
   Brain,
   Network,
   MessageSquare,
+  Sparkles,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 
@@ -130,7 +131,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   pathname === "/ai-chat" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
                 )}
               >
-                <MessageSquare className="h-5 w-5" />
+                <Sparkles className="h-5 w-5" />
                 <span className="sr-only">AI Chat</span>
               </Link>
             </TooltipTrigger>
