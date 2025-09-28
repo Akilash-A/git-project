@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Send, Trash2, MessageSquare, Bot, User } from "lucide-react";
+import { Send, Trash2, MessageSquare, Sparkles, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -364,8 +364,8 @@ export default function AIChatPage() {
     <DashboardLayout>
       <div className="flex bg-background overflow-hidden -my-4 sm:-my-4" style={{ height: 'calc(100vh)' }}>
       {/* Sidebar - Chat History */}
-      <div className="w-80 border-r bg-muted/10 flex flex-col min-h-0" style={{ borderRightColor: 'hsl(267.8, 45%, 23.5%)' }}>
-        <div className="p-4 border-b" style={{ borderBottomColor: 'hsl(267.8, 45%, 23.5%)' }}>
+      <div className="w-80 border-r border-border bg-muted/10 flex flex-col min-h-0">
+        <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
@@ -466,7 +466,7 @@ export default function AIChatPage() {
         {currentConversation ? (
           <>
             {/* Chat Header */}
-            <div className="border-b p-4" style={{ borderBottomColor: 'hsl(267.8, 45%, 23.5%)' }}>
+            <div className="border-b border-border p-4">
               <h1 className="text-xl font-semibold">
                 {typingTitleIds.has(currentConversation.id) ? (
                   <TitleTypeWriter 
@@ -489,7 +489,7 @@ export default function AIChatPage() {
               <div className="space-y-4 max-w-4xl mx-auto">
                 {currentConversation.messages.length === 0 ? (
                   <div className="text-center py-12">
-                    <Bot className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <Sparkles className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                     <h3 className="text-lg font-medium mb-2">Start a Conversation</h3>
                     <p className="text-muted-foreground mb-6">
                       Ask me about security threats, suspicious IPs, attack analysis, or any network security questions.
@@ -528,7 +528,7 @@ export default function AIChatPage() {
                       {msg.role === "assistant" && (
                         <Avatar className="h-8 w-8 mt-1">
                           <AvatarFallback className="bg-primary text-primary-foreground">
-                            <Bot className="h-4 w-4" />
+                            <Sparkles className="h-4 w-4" />
                           </AvatarFallback>
                         </Avatar>
                       )}
@@ -568,9 +568,12 @@ export default function AIChatPage() {
                             )}
                           </div>
                         ) : (
-                          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                          <p className="text-sm whitespace-pre-wrap" style={{ color: 'hsl(267.5, 42.1%, 22.4%)' }}>{msg.content}</p>
                         )}
-                        <p className="text-xs opacity-70 mt-1">
+                        <p 
+                          className="text-xs opacity-70 mt-1"
+                          style={msg.role === "user" ? { color: 'hsl(267.5, 42.1%, 22.4%)' } : {}}
+                        >
                           {new Date(msg.timestamp).toLocaleTimeString()}
                         </p>
                       </div>
@@ -588,7 +591,7 @@ export default function AIChatPage() {
                   <div className="flex gap-3 justify-start">
                     <Avatar className="h-8 w-8 mt-1">
                       <AvatarFallback className="bg-primary text-primary-foreground">
-                        <Bot className="h-4 w-4" />
+                        <Sparkles className="h-4 w-4" />
                       </AvatarFallback>
                     </Avatar>
                     <div className="bg-muted rounded-lg p-3">
@@ -605,7 +608,7 @@ export default function AIChatPage() {
             </ScrollArea>
 
             {/* Message Input */}
-            <div className="border-t p-4" style={{ borderTopColor: 'hsl(267.8, 45%, 23.5%)' }}>
+            <div className="border-t p-4" style={{ borderTopColor: 'hsl(var(--border))' }}>
               <div className="flex gap-2 max-w-4xl mx-auto">
                 <Input
                   value={message}
@@ -613,8 +616,8 @@ export default function AIChatPage() {
                   onKeyPress={handleKeyPress}
                   placeholder="Ask about security threats, IP analysis, attacks..."
                   className="flex-1"
+                  style={{ borderColor: 'hsl(var(--border))' }}
                   disabled={isWaitingForAI}
-                  style={{ borderColor: 'hsl(267.8, 45%, 23.5%)' }}
                 />
                 <Button onClick={sendMessage} disabled={!message.trim() || !canSendMessage}>
                   <Send className="h-4 w-4" />
