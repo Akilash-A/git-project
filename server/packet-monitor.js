@@ -516,13 +516,9 @@ class PacketMonitor {
       
       this.tcpdumpProcess.stderr.on('data', (data) => {
         const message = data.toString();
-        if (message.includes('listening on')) {
-          console.log(' Tcpdump listening:', message.trim());
-        }
       });
       
       this.tcpdumpProcess.on('close', (code) => {
-        console.log(`Tcpdump process exited with code ${code}`);
         this.isMonitoring = false;
       });
       
@@ -531,7 +527,6 @@ class PacketMonitor {
         this.emitError(`Tcpdump error: ${error.message}`);
       });
       
-      console.log(' Tcpdump packet capture started successfully');
     } catch (error) {
       console.error('Failed to start tcpdump:', error);
       this.emitError(`Failed to start tcpdump: ${error.message}`);
