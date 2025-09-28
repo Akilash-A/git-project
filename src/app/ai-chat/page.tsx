@@ -141,6 +141,7 @@ export default function AIChatPage() {
   const [currentConversation, setCurrentConversation] = useState<ChatConversation | null>(null);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isWaitingForAI, setIsWaitingForAI] = useState(false); // True when waiting for AI response
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [typingMessageIds, setTypingMessageIds] = useState<Set<string>>(new Set());
   const [typingTitleIds, setTypingTitleIds] = useState<Set<string>>(new Set());
@@ -206,7 +207,7 @@ export default function AIChatPage() {
   };
 
   const sendMessage = async () => {
-    if (!message.trim() || isLoading) return;
+    if (!message.trim() || isWaitingForAI || typingMessageIds.size > 0) return;
 
     const userMessage: Message = {
       id: `msg_${Date.now()}`,
@@ -237,6 +238,7 @@ export default function AIChatPage() {
     setCurrentConversation(updatedConversation);
     setMessage("");
     setIsLoading(true);
+    setIsWaitingForAI(true);
 
     try {
       // Send message to AI
@@ -285,6 +287,10 @@ export default function AIChatPage() {
           setTypingTitleIds(prev => new Set(prev).add(finalConversation.id));
         }
 
+        // AI response received, user can now type (but not send until typing completes)
+        setIsWaitingForAI(false);
+        setIsLoading(false);
+
         // Reload conversations from database to ensure sync
         await loadChatHistory();
       } else {
@@ -314,11 +320,13 @@ export default function AIChatPage() {
         };
 
         setCurrentConversation(errorConversation);
+        setIsWaitingForAI(false);
       }
     } catch (error) {
       console.error("Error sending message:", error);
     } finally {
       setIsLoading(false);
+      setIsWaitingForAI(false);
     }
   };
 
@@ -346,6 +354,10 @@ export default function AIChatPage() {
       sendMessage();
     }
   };
+
+  // Computed values for UI state
+  const isTypingAnimationActive = typingMessageIds.size > 0;
+  const canSendMessage = !isWaitingForAI && !isTypingAnimationActive;
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -599,9 +611,9 @@ export default function AIChatPage() {
                   onKeyPress={handleKeyPress}
                   placeholder="Ask about security threats, IP analysis, attacks..."
                   className="flex-1"
-                  disabled={isLoading}
+                  disabled={isWaitingForAI}
                 />
-                <Button onClick={sendMessage} disabled={!message.trim() || isLoading}>
+                <Button onClick={sendMessage} disabled={!message.trim() || !canSendMessage}>
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
