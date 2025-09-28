@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import ReactMarkdown from 'react-markdown';
+import { DashboardLayout } from "@/components/layout/dashboard-layout";
 
 // TypeWriter component for typing animation
 interface TypeWriterProps {
@@ -360,7 +361,8 @@ export default function AIChatPage() {
   const canSendMessage = !isWaitingForAI && !isTypingAnimationActive;
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <DashboardLayout>
+      <div className="flex h-[calc(100vh-2rem)] bg-background overflow-hidden">
       {/* Sidebar - Chat History */}
       <div className="w-80 border-r border-border bg-muted/10 flex flex-col min-h-0">
         <div className="p-4 border-b border-border">
@@ -635,5 +637,6 @@ export default function AIChatPage() {
         )}
       </div>
     </div>
+    </DashboardLayout>
   );
 }
