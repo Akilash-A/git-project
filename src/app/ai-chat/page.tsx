@@ -530,7 +530,7 @@ export default function AIChatPage() {
                             {msg.isTyping && typingMessageIds.has(msg.id) ? (
                               <TypeWriter
                                 text={msg.content}
-                                speed={25}
+                                speed={15}
                                 onComplete={() => handleTypingComplete(msg.id)}
                               />
                             ) : (
