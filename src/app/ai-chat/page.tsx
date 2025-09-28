@@ -120,6 +120,7 @@ export default function AIChatPage() {
         body: JSON.stringify({
           message: message.trim(),
           conversationId: conversation.id,
+          conversationTitle: conversation.title,
           messages: updatedConversation.messages,
         }),
       });
@@ -141,17 +142,8 @@ export default function AIChatPage() {
 
         setCurrentConversation(finalConversation);
 
-        // Update conversations list
-        setConversations(prev => {
-          const existingIndex = prev.findIndex(c => c.id === conversation.id);
-          if (existingIndex >= 0) {
-            const updated = [...prev];
-            updated[existingIndex] = finalConversation;
-            return updated;
-          } else {
-            return [finalConversation, ...prev];
-          }
-        });
+        // Reload conversations from database to ensure sync
+        await loadChatHistory();
       } else {
         console.error("Failed to send message");
       }

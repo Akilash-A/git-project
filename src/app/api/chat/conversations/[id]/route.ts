@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import databaseService from '@/lib/database-service';
+import { getDirectChatService } from '@/lib/direct-chat-service';
 
 export async function DELETE(
   request: NextRequest,
@@ -7,7 +7,8 @@ export async function DELETE(
 ) {
   try {
     const conversationId = params.id;
-    const success = await databaseService.deleteChatConversation(conversationId);
+    const chatService = getDirectChatService();
+    const success = await chatService.deleteChatConversation(conversationId);
     
     if (success) {
       return NextResponse.json({ success: true });

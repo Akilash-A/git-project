@@ -1,10 +1,103 @@
 import { NextRequest, NextResponse } from 'next/server';
-import databaseService from '@/lib/database-service';
 import { ipAddressSecurityScoring } from '@/ai/flows/ip-address-security-scoring';
+import { io } from 'socket.io-client';
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, conversationId, messages } = await request.json();
+    const { message, conversationId, messages, conversationTitle } = await request.json();
+
+    // Use a simpler approach - create the conversation and messages using socket.io
+    return new Promise<NextResponse>((resolve) => {
+      const socket = io('http://localhost:3001');
+      let conversationCreated = false;
+      let userMessageSaved = false;
+      let aiResponse = '';
+
+      socket.on('connect', () => {
+        // First check if conversation exists
+        socket.emit('get-chat-conversations');
+      });
+
+      socket.on('chat-conversations-data', (conversations) => {
+        const conversationExists = conversations.some((c: any) => c.id === conversationId);
+        
+        if (!conversationExists) {
+          // Create the conversation first
+          const conversationData = {
+            id: conversationId,
+            title: conversationTitle || message.trim().substring(0, 50) + (message.length > 50 ? "..." : ""),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          
+          socket.emit('create-chat-conversation', conversationData);
+        } else {
+          conversationCreated = true;
+          saveUserMessage();
+        }
+      });
+
+      socket.on('chat-conversation-created', (success) => {
+        if (success) {
+          conversationCreated = true;
+          saveUserMessage();
+        } else {
+          socket.disconnect();
+          resolve(NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 }));
+        }
+      });
+
+      function saveUserMessage() {
+        const userMessageData = {
+          id: `msg_${Date.now()}_user`,
+          conversationId,
+          content: message,
+          role: 'user',
+          timestamp: new Date().toISOString(),
+        };
+
+        socket.emit('insert-chat-message', userMessageData);
+      }
+
+      socket.on('chat-message-inserted', (success) => {
+        if (success && !userMessageSaved) {
+          userMessageSaved = true;
+          // Generate AI response
+          generateAIResponse();
+        } else if (success && userMessageSaved) {
+          // AI message saved, we're done
+          socket.disconnect();
+          resolve(NextResponse.json({ response: aiResponse }));
+        }
+      });
+
+      async function generateAIResponse() {
+        // Simple AI response for now
+        aiResponse = `I'm your network security AI assistant. You asked: "${message}"\n\nI can help you with network security analysis, threat detection, and IP address security scoring. How can I assist you further?`;
+        
+        // Save AI response
+        const aiMessageData = {
+          id: `msg_${Date.now()}_ai`,
+          conversationId,
+          content: aiResponse,
+          role: 'assistant',
+          timestamp: new Date().toISOString(),
+        };
+
+        socket.emit('insert-chat-message', aiMessageData);
+      }
+
+      socket.on('connect_error', (error) => {
+        console.error('Connection error:', error);
+        socket.disconnect();
+        resolve(NextResponse.json({ error: 'Failed to process message' }, { status: 500 }));
+      });
+
+      setTimeout(() => {
+        socket.disconnect();
+        resolve(NextResponse.json({ error: 'Timeout' }, { status: 500 }));
+      }, 10000);
+    });
 
     // Save user message to database
     const userMessageData = {
@@ -15,10 +108,10 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     };
 
-    await databaseService.insertChatMessage(userMessageData);
+    await chatService.insertChatMessage(userMessageData);
 
     // Update conversation timestamp
-    await databaseService.updateChatConversation(conversationId, {
+    await chatService.updateChatConversation(conversationId, {
       updatedAt: new Date().toISOString(),
     });
 
@@ -35,21 +128,21 @@ export async function POST(request: NextRequest) {
         const ip = ips[0];
         
         // Get packet data for this IP (mock data for now)
-        const packets = await databaseService.getPackets({ ip, limit: 100 });
+        const packets = await chatService.getPackets({ ip, limit: 100 });
         
         // Prepare attack data
         const attackData = {
           totalPackets: packets.length,
-          ddosAttacks: packets.filter(p => p.is_ddos_attack).length,
-          portScans: packets.filter(p => p.is_port_scan).length,
-          bruteForceAttacks: packets.filter(p => p.is_brute_force).length,
-          malwareDetections: packets.filter(p => p.is_malware).length,
-          connectionFloods: packets.filter(p => p.is_connection_flood).length,
-          unauthorizedAccess: packets.filter(p => p.is_unauthorized_access).length,
-          knownThreats: packets.filter(p => p.is_known_threat).length,
-          averageThreatScore: packets.length > 0 ? packets.reduce((sum, p) => sum + (p.threat_score || 0), 0) / packets.length : 0,
-          maxThreatScore: packets.length > 0 ? Math.max(...packets.map(p => p.threat_score || 0)) : 0,
-          attackDetails: packets.filter(p => p.attack_details).map(p => p.attack_details).slice(0, 10)
+          ddosAttacks: packets.filter((p: any) => p.is_ddos_attack).length,
+          portScans: packets.filter((p: any) => p.is_port_scan).length,
+          bruteForceAttacks: packets.filter((p: any) => p.is_brute_force).length,
+          malwareDetections: packets.filter((p: any) => p.is_malware).length,
+          connectionFloods: packets.filter((p: any) => p.is_connection_flood).length,
+          unauthorizedAccess: packets.filter((p: any) => p.is_unauthorized_access).length,
+          knownThreats: packets.filter((p: any) => p.is_known_threat).length,
+          averageThreatScore: packets.length > 0 ? packets.reduce((sum: number, p: any) => sum + (p.threat_score || 0), 0) / packets.length : 0,
+          maxThreatScore: packets.length > 0 ? Math.max(...packets.map((p: any) => p.threat_score || 0)) : 0,
+          attackDetails: packets.filter((p: any) => p.attack_details).map((p: any) => p.attack_details).slice(0, 10)
         };
 
         const aiResult = await ipAddressSecurityScoring({
@@ -105,10 +198,10 @@ Based on this analysis, consider implementing enhanced monitoring and security m
       timestamp: new Date().toISOString(),
     };
 
-    await databaseService.insertChatMessage(aiMessageData);
+    await chatService.insertChatMessage(aiMessageData);
 
     // Update conversation timestamp again
-    await databaseService.updateChatConversation(conversationId, {
+    await chatService.updateChatConversation(conversationId, {
       updatedAt: new Date().toISOString(),
     });
 

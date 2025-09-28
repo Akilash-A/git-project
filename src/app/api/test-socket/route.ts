@@ -6,20 +6,23 @@ export async function GET() {
     const socket = io('http://localhost:3001');
     
     socket.on('connect', () => {
+      console.log('Test: Connected to socket server');
       socket.emit('get-chat-conversations');
     });
     
     socket.on('chat-conversations-data', (conversations) => {
+      console.log('Test: Received conversations:', conversations.length);
       socket.disconnect();
       resolve(NextResponse.json(conversations));
     });
     
     socket.on('connect_error', (error) => {
-      console.error('Connection error:', error);
+      console.error('Test: Connection error:', error);
       socket.disconnect();
-      resolve(NextResponse.json({ error: 'Failed to fetch conversations' }, { status: 500 }));
+      resolve(NextResponse.json({ error: 'Connection failed', details: error.message }, { status: 500 }));
     });
     
+    // Timeout after 5 seconds
     setTimeout(() => {
       socket.disconnect();
       resolve(NextResponse.json({ error: 'Timeout' }, { status: 500 }));
@@ -28,38 +31,29 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const conversation = await request.json();
+  const body = await request.json();
   
-  // Add timestamps
-  const now = new Date().toISOString();
-  const conversationData = {
-    ...conversation,
-    createdAt: now,
-    updatedAt: now,
-  };
-
   return new Promise((resolve) => {
     const socket = io('http://localhost:3001');
     
     socket.on('connect', () => {
-      socket.emit('create-chat-conversation', conversationData);
+      console.log('Test: Connected for conversation creation');
+      socket.emit('create-chat-conversation', body);
     });
     
     socket.on('chat-conversation-created', (success) => {
+      console.log('Test: Conversation created:', success);
       socket.disconnect();
-      if (success) {
-        resolve(NextResponse.json({ success: true }));
-      } else {
-        resolve(NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 }));
-      }
+      resolve(NextResponse.json({ success }));
     });
     
     socket.on('connect_error', (error) => {
-      console.error('Connection error:', error);
+      console.error('Test: Connection error:', error);
       socket.disconnect();
-      resolve(NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 }));
+      resolve(NextResponse.json({ error: 'Connection failed', details: error.message }, { status: 500 }));
     });
     
+    // Timeout after 5 seconds
     setTimeout(() => {
       socket.disconnect();
       resolve(NextResponse.json({ error: 'Timeout' }, { status: 500 }));
