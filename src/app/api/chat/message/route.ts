@@ -38,14 +38,166 @@ function getDatabase() {
   return db;
 }
 
-// AI response generation using Google AI
-async function generateAIResponse(userMessage: string): Promise<string> {
+// Database query functions for AI context
+function queryDatabase(db: any, userMessage: string): string {
+  const lowerMessage = userMessage.toLowerCase();
+  let dbContext = '';
+
+  try {
+    // Query chat conversations and messages if user asks about chat history
+    if (lowerMessage.includes('conversation') || lowerMessage.includes('chat') || lowerMessage.includes('message')) {
+      const conversationsStmt = db.prepare(`
+        SELECT COUNT(*) as total_conversations, 
+               MAX(updated_at) as latest_conversation,
+               MIN(created_at) as first_conversation
+        FROM chat_conversations
+      `);
+      const conversationStats = conversationsStmt.get();
+
+      const messagesStmt = db.prepare(`
+        SELECT COUNT(*) as total_messages,
+               COUNT(CASE WHEN role = 'user' THEN 1 END) as user_messages,
+               COUNT(CASE WHEN role = 'assistant' THEN 1 END) as ai_messages
+        FROM chat_messages
+      `);
+      const messageStats = messagesStmt.get();
+
+      dbContext += `\n\n**Chat Database Context:**
+- Total Conversations: ${conversationStats.total_conversations}
+- Total Messages: ${messageStats.total_messages}
+- User Messages: ${messageStats.user_messages}
+- AI Messages: ${messageStats.ai_messages}
+- Latest Activity: ${conversationStats.latest_conversation || 'None'}
+- First Conversation: ${conversationStats.first_conversation || 'None'}`;
+    }
+
+    // Query recent conversations if user asks about recent activity
+    if (lowerMessage.includes('recent') || lowerMessage.includes('latest') || lowerMessage.includes('last')) {
+      const recentConversationsStmt = db.prepare(`
+        SELECT title, updated_at, 
+               (SELECT COUNT(*) FROM chat_messages WHERE conversation_id = c.id) as message_count
+        FROM chat_conversations c
+        ORDER BY updated_at DESC
+        LIMIT 5
+      `);
+      const recentConversations = recentConversationsStmt.all();
+
+      if (recentConversations.length > 0) {
+        dbContext += `\n\n**Recent Conversations:**`;
+        recentConversations.forEach((conv: any, index: number) => {
+          dbContext += `\n${index + 1}. "${conv.title}" - ${conv.message_count} messages (${new Date(conv.updated_at).toLocaleDateString()})`;
+        });
+      }
+    }
+
+    // Query message content if user asks about specific topics discussed
+    if (lowerMessage.includes('discuss') || lowerMessage.includes('topic') || lowerMessage.includes('about') || lowerMessage.includes('search')) {
+      const topicKeywords = ['ddos', 'attack', 'security', 'ip', 'threat', 'malware', 'port', 'scan'];
+      const foundTopics: string[] = [];
+      
+      topicKeywords.forEach(keyword => {
+        if (lowerMessage.includes(keyword)) {
+          const topicMessagesStmt = db.prepare(`
+            SELECT COUNT(*) as count
+            FROM chat_messages
+            WHERE LOWER(content) LIKE ?
+          `);
+          const count = topicMessagesStmt.get(`%${keyword}%`).count;
+          if (count > 0) {
+            foundTopics.push(`${keyword}: ${count} messages`);
+          }
+        }
+      });
+
+      if (foundTopics.length > 0) {
+        dbContext += `\n\n**Topic Discussion Frequency:**\n- ${foundTopics.join('\n- ')}`;
+      }
+    }
+
+  } catch (error) {
+    console.error('Error querying database for context:', error);
+  }
+
+  return dbContext;
+}
+
+// Query packet database for network security data
+function queryPacketDatabase(userMessage: string): string {
+  const lowerMessage = userMessage.toLowerCase();
+  let packetContext = '';
+
+  // Only query packet database if user asks about network/packet data
+  if (lowerMessage.includes('packet') || lowerMessage.includes('network') || lowerMessage.includes('traffic') || 
+      lowerMessage.includes('attack') || lowerMessage.includes('monitor') || lowerMessage.includes('capture')) {
+    
+    try {
+      const packetDbPath = path.join(process.cwd(), 'data', 'packets.db');
+      if (fs.existsSync(packetDbPath)) {
+        const packetDb = new Database(packetDbPath);
+        
+        try {
+          // Try to get basic packet statistics
+          const tableCheckStmt = packetDb.prepare(`
+            SELECT name FROM sqlite_master WHERE type='table' AND name='packets'
+          `);
+          const tableExists = tableCheckStmt.get();
+          
+          if (tableExists) {
+            const packetStatsStmt = packetDb.prepare(`
+              SELECT COUNT(*) as total_packets,
+                     COUNT(DISTINCT source_ip) as unique_source_ips,
+                     COUNT(DISTINCT destination_ip) as unique_dest_ips
+              FROM packets
+              LIMIT 1
+            `);
+            const packetStats = packetStatsStmt.get() as any;
+            
+            packetContext += `\n\n**Network Packet Database Context:**
+- Total Packets Captured: ${packetStats?.total_packets || 0}
+- Unique Source IPs: ${packetStats?.unique_source_ips || 0}
+- Unique Destination IPs: ${packetStats?.unique_dest_ips || 0}`;
+
+            // Get recent activity if available
+            const recentPacketsStmt = packetDb.prepare(`
+              SELECT source_ip, destination_ip, COUNT(*) as packet_count
+              FROM packets
+              GROUP BY source_ip, destination_ip
+              ORDER BY packet_count DESC
+              LIMIT 5
+            `);
+            const recentPackets = recentPacketsStmt.all();
+            
+            if (recentPackets.length > 0) {
+              packetContext += `\n\n**Top Network Connections:**`;
+              recentPackets.forEach((packet: any, index: number) => {
+                packetContext += `\n${index + 1}. ${packet.source_ip} → ${packet.destination_ip} (${packet.packet_count} packets)`;
+              });
+            }
+          }
+        } catch (error) {
+          packetContext += `\n\n**Network Database:** Available but structure unknown`;
+        } finally {
+          packetDb.close();
+        }
+      }
+    } catch (error) {
+      console.error('Error querying packet database:', error);
+    }
+  }
+
+  return packetContext;
+}
+
+// AI response generation using Google AI with database access
+async function generateAIResponse(userMessage: string, db?: any): Promise<string> {
   try {
     // Check if the message contains an IP address for specific analysis
     const ipRegex = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
     const ips = userMessage.match(ipRegex);
     
     let contextualInfo = '';
+    
+    // Get IP analysis context
     if (ips && ips.length > 0) {
       try {
         // Get IP security analysis
@@ -72,6 +224,16 @@ async function generateAIResponse(userMessage: string): Promise<string> {
       }
     }
 
+    // Get database context if database is available
+    if (db) {
+      const dbContext = queryDatabase(db, userMessage);
+      contextualInfo += dbContext;
+    }
+
+    // Get packet database context for network-related queries
+    const packetContext = queryPacketDatabase(userMessage);
+    contextualInfo += packetContext;
+
     const response = await ai.generate({
       prompt: `You are NetGuardian, an advanced AI security assistant specializing in network security, threat analysis, and cybersecurity guidance.
 
@@ -82,6 +244,10 @@ async function generateAIResponse(userMessage: string): Promise<string> {
 - Security incident response and mitigation strategies
 - Network monitoring and defense recommendations
 - Cybersecurity best practices and implementation
+- Chat history and conversation analysis
+- Database query insights and statistics
+- Network packet analysis and traffic monitoring
+- Real-time network security data interpretation
 
 **Your Personality:**
 - Professional but approachable
@@ -89,10 +255,30 @@ async function generateAIResponse(userMessage: string): Promise<string> {
 - Use clear explanations with technical depth when appropriate
 - Format responses with markdown for better readability
 - Focus on real-world security implications
+- Reference database data when relevant to user questions
 
 **User Message:** ${userMessage}
 
 ${contextualInfo}
+
+**Database Access:**
+You have access to multiple databases:
+
+1. **Chat Database** - When users ask about:
+   - Chat history, conversations, or messages
+   - Recent activity or discussions
+   - Topics that have been discussed
+   - Statistics about conversations
+   - Search for specific content in past chats
+
+2. **Network Packet Database** - When users ask about:
+   - Network traffic and packet analysis
+   - IP address activity and connections
+   - Network monitoring data
+   - Attack patterns in captured traffic
+   - Real-time network security statistics
+
+Use the provided database context to give accurate, data-driven responses.
 
 **Instructions:**
 1. Analyze the user's security question or concern
@@ -100,9 +286,10 @@ ${contextualInfo}
 3. Use markdown formatting with headers, bullet points, and emphasis
 4. Include specific examples or recommendations when relevant
 5. If discussing IP addresses, incorporate any provided analysis data
-6. Always prioritize practical security value in your response
+6. When database context is provided, reference specific data points
+7. Always prioritize practical security value in your response
 
-Respond as NetGuardian with helpful, expert-level security guidance.`,
+Respond as NetGuardian with helpful, expert-level security guidance based on available data.`,
       model: 'googleai/gemini-2.5-flash',
     });
 
@@ -163,8 +350,8 @@ export async function POST(request: NextRequest) {
       saveMessageStmt.run(userMessageData.id, userMessageData.conversationId, userMessageData.content, userMessageData.role, userMessageData.timestamp);
       console.log('Saved user message:', userMessageData.id);
       
-      // Generate AI response using Google AI
-      const aiResponse = await generateAIResponse(message);
+      // Generate AI response using Google AI with database access
+      const aiResponse = await generateAIResponse(message, db);
       
       // Save AI message
       const aiMessageData = {
