@@ -188,6 +188,42 @@ function queryPacketDatabase(userMessage: string): string {
   return packetContext;
 }
 
+// Generate conversation title using AI
+async function generateConversationTitle(firstUserMessage: string): Promise<string> {
+  try {
+    const response = await ai.generate({
+      prompt: `Generate a short, descriptive title for a conversation that starts with this message: "${firstUserMessage}"
+
+The title should be:
+- 3-6 words maximum
+- Professional and clear
+- Focused on the main topic/question
+- Security-focused when relevant
+- No quotation marks or special formatting
+
+Examples:
+- "Is IP 192.168.1.100 safe?" → "IP Safety Analysis"
+- "What are DDoS attacks?" → "DDoS Attack Overview"
+- "Help with network security" → "Network Security Help"
+- "Analyze recent threats" → "Threat Analysis Request"
+
+Generate only the title, nothing else.`,
+      model: 'googleai/gemini-2.5-flash',
+    });
+
+    const title = response.text.trim();
+    // Ensure the title is not too long and clean
+    return title.length > 50 ? title.substring(0, 47) + "..." : title;
+  } catch (error) {
+    console.error('Error generating conversation title:', error);
+    // Fallback to a descriptive title based on the message
+    if (firstUserMessage.length > 50) {
+      return firstUserMessage.substring(0, 47) + "...";
+    }
+    return firstUserMessage || "Security Discussion";
+  }
+}
+
 // AI response generation using Google AI with database access
 async function generateAIResponse(userMessage: string, db?: any): Promise<string> {
   try {
@@ -317,20 +353,27 @@ export async function POST(request: NextRequest) {
       
       // Create conversation if it doesn't exist
       if (!existingConversation) {
+        // Generate AI-powered conversation title
+        const aiGeneratedTitle = await generateConversationTitle(message);
+        
         const createConversationStmt = db.prepare(`
           INSERT INTO chat_conversations (id, title, created_at, updated_at)
           VALUES (?, ?, ?, ?)
         `);
         
+        // Use AI-generated title, fallback to provided title, or create from message
+        const finalTitle = conversationTitle || aiGeneratedTitle || 
+                          (message.trim().substring(0, 50) + (message.length > 50 ? "..." : ""));
+        
         const conversationData = {
           id: conversationId,
-          title: conversationTitle || message.trim().substring(0, 50) + (message.length > 50 ? "..." : ""),
+          title: finalTitle,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
         
         createConversationStmt.run(conversationData.id, conversationData.title, conversationData.createdAt, conversationData.updatedAt);
-        console.log('Created conversation:', conversationData.id);
+        console.log('Created conversation with AI title:', conversationData.id, '→', conversationData.title);
       }
       
       // Save user message

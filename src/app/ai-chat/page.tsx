@@ -12,11 +12,73 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import ReactMarkdown from 'react-markdown';
 
+// TypeWriter component for typing animation
+interface TypeWriterProps {
+  text: string;
+  speed?: number;
+  onComplete?: () => void;
+}
+
+function TypeWriter({ text, speed = 30, onComplete }: TypeWriterProps) {
+  const [displayText, setDisplayText] = useState("");
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
+
+  useEffect(() => {
+    if (currentIndex < text.length) {
+      const timer = setTimeout(() => {
+        setDisplayText(prev => prev + text[currentIndex]);
+        setCurrentIndex(prev => prev + 1);
+      }, speed);
+
+      return () => clearTimeout(timer);
+    } else if (!isComplete) {
+      setIsComplete(true);
+      onComplete?.();
+    }
+  }, [currentIndex, text, speed, onComplete, isComplete]);
+
+  // Reset when text changes
+  useEffect(() => {
+    setDisplayText("");
+    setCurrentIndex(0);
+    setIsComplete(false);
+  }, [text]);
+
+  return (
+    <div className="text-sm max-w-none">
+      <div className="inline">
+        <ReactMarkdown
+          components={{
+            h1: ({children}) => <h1 className="text-lg font-bold mb-3 text-foreground">{children}</h1>,
+            h2: ({children}) => <h2 className="text-base font-semibold mb-2 text-foreground">{children}</h2>,
+            h3: ({children}) => <h3 className="text-sm font-medium mb-2 text-foreground">{children}</h3>,
+            p: ({children}) => <p className="mb-2 last:mb-0 text-foreground leading-relaxed inline">{children}</p>,
+            ul: ({children}) => <ul className="list-disc list-inside mb-3 space-y-1 pl-2">{children}</ul>,
+            ol: ({children}) => <ol className="list-decimal list-inside mb-3 space-y-1 pl-2">{children}</ol>,
+            li: ({children}) => <li className="text-sm text-foreground leading-relaxed">{children}</li>,
+            strong: ({children}) => <strong className="font-semibold text-foreground">{children}</strong>,
+            em: ({children}) => <em className="italic text-foreground">{children}</em>,
+            code: ({children}) => <code className="bg-accent/20 px-1.5 py-0.5 rounded text-xs font-mono text-foreground border">{children}</code>,
+            blockquote: ({children}) => <blockquote className="border-l-4 border-accent pl-4 italic mb-2">{children}</blockquote>,
+          }}
+        >
+          {displayText}
+        </ReactMarkdown>
+        {!isComplete && (
+          <span className="text-foreground animate-pulse">|</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface Message {
   id: string;
   content: string;
   role: "user" | "assistant";
   timestamp: Date;
+  isTyping?: boolean; // Flag to show typing animation for new messages
 }
 
 interface ChatConversation {
@@ -33,7 +95,17 @@ export default function AIChatPage() {
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [typingMessageIds, setTypingMessageIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Handle typing animation completion
+  const handleTypingComplete = (messageId: string) => {
+    setTypingMessageIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(messageId);
+      return newSet;
+    });
+  };
 
   // Scroll to bottom when new messages are added
   const scrollToBottom = () => {
@@ -70,7 +142,7 @@ export default function AIChatPage() {
   const startNewConversation = () => {
     const newConversation: ChatConversation = {
       id: `conv_${Date.now()}`,
-      title: "New Conversation",
+      title: "New Conversation", // This will be updated by AI when first message is sent
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -93,7 +165,7 @@ export default function AIChatPage() {
     if (!conversation) {
       conversation = {
         id: `conv_${Date.now()}`,
-        title: message.trim().substring(0, 50) + (message.length > 50 ? "..." : ""),
+        title: "Generating title...", // Temporary title while AI generates the real one
         messages: [],
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -121,19 +193,24 @@ export default function AIChatPage() {
         body: JSON.stringify({
           message: message.trim(),
           conversationId: conversation.id,
-          conversationTitle: conversation.title,
+          conversationTitle: null, // Let AI generate the title
           messages: updatedConversation.messages,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
+        const assistantMessageId = `msg_${Date.now()}_ai`;
         const assistantMessage: Message = {
-          id: `msg_${Date.now()}_ai`,
+          id: assistantMessageId,
           content: data.response,
           role: "assistant",
           timestamp: new Date(),
+          isTyping: true, // Enable typing animation for new AI messages
         };
+
+        // Add message ID to typing set
+        setTypingMessageIds(prev => new Set(prev).add(assistantMessageId));
 
         const finalConversation = {
           ...updatedConversation,
@@ -365,23 +442,31 @@ export default function AIChatPage() {
                       >
                         {msg.role === "assistant" ? (
                           <div className="text-sm max-w-none">
-                            <ReactMarkdown
-                              components={{
-                                h1: ({children}) => <h1 className="text-lg font-bold mb-3 text-foreground">{children}</h1>,
-                                h2: ({children}) => <h2 className="text-base font-semibold mb-2 text-foreground">{children}</h2>,
-                                h3: ({children}) => <h3 className="text-sm font-medium mb-2 text-foreground">{children}</h3>,
-                                p: ({children}) => <p className="mb-2 last:mb-0 text-foreground leading-relaxed">{children}</p>,
-                                ul: ({children}) => <ul className="list-disc list-inside mb-3 space-y-1 pl-2">{children}</ul>,
-                                ol: ({children}) => <ol className="list-decimal list-inside mb-3 space-y-1 pl-2">{children}</ol>,
-                                li: ({children}) => <li className="text-sm text-foreground leading-relaxed">{children}</li>,
-                                strong: ({children}) => <strong className="font-semibold text-foreground">{children}</strong>,
-                                em: ({children}) => <em className="italic text-foreground">{children}</em>,
-                                code: ({children}) => <code className="bg-accent/20 px-1.5 py-0.5 rounded text-xs font-mono text-foreground border">{children}</code>,
-                                blockquote: ({children}) => <blockquote className="border-l-4 border-accent pl-4 italic mb-2">{children}</blockquote>,
-                              }}
-                            >
-                              {msg.content}
-                            </ReactMarkdown>
+                            {msg.isTyping && typingMessageIds.has(msg.id) ? (
+                              <TypeWriter
+                                text={msg.content}
+                                speed={15}
+                                onComplete={() => handleTypingComplete(msg.id)}
+                              />
+                            ) : (
+                              <ReactMarkdown
+                                components={{
+                                  h1: ({children}) => <h1 className="text-lg font-bold mb-3 text-foreground">{children}</h1>,
+                                  h2: ({children}) => <h2 className="text-base font-semibold mb-2 text-foreground">{children}</h2>,
+                                  h3: ({children}) => <h3 className="text-sm font-medium mb-2 text-foreground">{children}</h3>,
+                                  p: ({children}) => <p className="mb-2 last:mb-0 text-foreground leading-relaxed">{children}</p>,
+                                  ul: ({children}) => <ul className="list-disc list-inside mb-3 space-y-1 pl-2">{children}</ul>,
+                                  ol: ({children}) => <ol className="list-decimal list-inside mb-3 space-y-1 pl-2">{children}</ol>,
+                                  li: ({children}) => <li className="text-sm text-foreground leading-relaxed">{children}</li>,
+                                  strong: ({children}) => <strong className="font-semibold text-foreground">{children}</strong>,
+                                  em: ({children}) => <em className="italic text-foreground">{children}</em>,
+                                  code: ({children}) => <code className="bg-accent/20 px-1.5 py-0.5 rounded text-xs font-mono text-foreground border">{children}</code>,
+                                  blockquote: ({children}) => <blockquote className="border-l-4 border-accent pl-4 italic mb-2">{children}</blockquote>,
+                                }}
+                              >
+                                {msg.content}
+                              </ReactMarkdown>
+                            )}
                           </div>
                         ) : (
                           <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
