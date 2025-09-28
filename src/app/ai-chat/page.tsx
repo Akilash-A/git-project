@@ -362,10 +362,10 @@ export default function AIChatPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex h-[calc(100vh-2rem)] bg-background overflow-hidden">
+      <div className="flex bg-background overflow-hidden -my-4 sm:-my-4" style={{ height: 'calc(100vh)' }}>
       {/* Sidebar - Chat History */}
-      <div className="w-80 border-r border-border bg-muted/10 flex flex-col min-h-0">
-        <div className="p-4 border-b border-border">
+      <div className="w-80 border-r bg-muted/10 flex flex-col min-h-0" style={{ borderRightColor: 'hsl(267.8, 45%, 23.5%)' }}>
+        <div className="p-4 border-b" style={{ borderBottomColor: 'hsl(267.8, 45%, 23.5%)' }}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
@@ -466,7 +466,7 @@ export default function AIChatPage() {
         {currentConversation ? (
           <>
             {/* Chat Header */}
-            <div className="border-b border-border p-4">
+            <div className="border-b p-4" style={{ borderBottomColor: 'hsl(267.8, 45%, 23.5%)' }}>
               <h1 className="text-xl font-semibold">
                 {typingTitleIds.has(currentConversation.id) ? (
                   <TitleTypeWriter 
@@ -605,7 +605,7 @@ export default function AIChatPage() {
             </ScrollArea>
 
             {/* Message Input */}
-            <div className="border-t border-border p-4">
+            <div className="border-t p-4" style={{ borderTopColor: 'hsl(267.8, 45%, 23.5%)' }}>
               <div className="flex gap-2 max-w-4xl mx-auto">
                 <Input
                   value={message}
@@ -614,6 +614,7 @@ export default function AIChatPage() {
                   placeholder="Ask about security threats, IP analysis, attacks..."
                   className="flex-1"
                   disabled={isWaitingForAI}
+                  style={{ borderColor: 'hsl(267.8, 45%, 23.5%)' }}
                 />
                 <Button onClick={sendMessage} disabled={!message.trim() || !canSendMessage}>
                   <Send className="h-4 w-4" />
