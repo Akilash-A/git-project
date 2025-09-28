@@ -56,7 +56,7 @@ import databaseService from "@/lib/database-service";
 const ipSchema = z.object({
   ip: z.string().ip({ version: "v4", message: "Invalid IPv4 address" }),
   action: z.enum(["block", "throttle"]),
-  delay: z.number().min(100).max(10000).optional(),
+  delay: z.number().min(2000).max(30000).optional(),
 });
 
 type TrafficRule = {
@@ -137,11 +137,14 @@ export default function TrafficControlPage() {
     defaultValues: {
       ip: "",
       action: "block",
-      delay: 1000,
+      delay: 2000,
     },
   });
 
   const watchAction = form.watch("action");
+  
+  // Debug: Log the watchAction value
+  console.log("Current watchAction:", watchAction);
 
   async function onSubmit(values: z.infer<typeof ipSchema>) {
     // Check if IP already exists
@@ -167,7 +170,11 @@ export default function TrafficControlPage() {
       if (result.success) {
         // Reload rules from database to get the latest state
         await loadTrafficRules();
-        form.reset();
+        form.reset({
+          ip: "",
+          action: "block",
+          delay: 2000,
+        });
         
         toast({
           title: "Traffic Rule Added",
@@ -355,7 +362,18 @@ export default function TrafficControlPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Action</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select 
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            // Reset delay when switching actions
+                            if (value === "block") {
+                              form.setValue("delay", undefined);
+                            } else if (value === "throttle") {
+                              form.setValue("delay", 2000);
+                            }
+                          }} 
+                          value={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger className="border-[hsl(267.1,37.5%,22%)]">
                               <SelectValue placeholder="Select action" />
@@ -387,10 +405,10 @@ export default function TrafficControlPage() {
                       name="delay"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Response Delay (ms)</FormLabel>
+                          <FormLabel>Response Delay</FormLabel>
                           <Select 
                             onValueChange={(value) => field.onChange(parseInt(value))} 
-                            defaultValue={field.value?.toString()}
+                            value={field.value?.toString()}
                           >
                             <FormControl>
                               <SelectTrigger className="border-[hsl(267.1,37.5%,22%)]">
@@ -398,12 +416,13 @@ export default function TrafficControlPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="500">500ms (0.5 second)</SelectItem>
-                              <SelectItem value="1000">1000ms (1 second)</SelectItem>
-                              <SelectItem value="2000">2000ms (2 seconds)</SelectItem>
-                              <SelectItem value="3000">3000ms (3 seconds)</SelectItem>
-                              <SelectItem value="5000">5000ms (5 seconds)</SelectItem>
-                              <SelectItem value="10000">10000ms (10 seconds)</SelectItem>
+                              <SelectItem value="2000">2 seconds</SelectItem>
+                              <SelectItem value="3000">3 seconds</SelectItem>
+                              <SelectItem value="5000">5 seconds</SelectItem>
+                              <SelectItem value="7000">7 seconds</SelectItem>
+                              <SelectItem value="10000">10 seconds</SelectItem>
+                              <SelectItem value="15000">15 seconds</SelectItem>
+                              <SelectItem value="30000">30 seconds</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />

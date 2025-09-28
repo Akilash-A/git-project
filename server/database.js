@@ -510,6 +510,14 @@ class PacketDatabase {
     return stmt.all().map(row => row.ip);
   }
 
+  getActiveThrottledIps() {
+    const stmt = this.db.prepare(`
+      SELECT ip, delay FROM traffic_control 
+      WHERE action = 'throttle' AND status = 'active'
+    `);
+    return stmt.all();
+  }
+
   // Database maintenance
   clearAllData() {
     const tables = ['packets', 'alerts', 'security_analysis'];

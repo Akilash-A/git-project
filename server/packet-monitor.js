@@ -89,7 +89,6 @@ class PacketMonitor {
 
   setupSocketHandlers() {
     this.io.on('connection', (socket) => {
-      console.log('Client connected:', socket.id);
       this.connectedClients.add(socket);
       
       // Send initial network interfaces and capture capabilities
@@ -101,12 +100,10 @@ class PacketMonitor {
       });
       
       socket.on('start-monitoring', (options = {}) => {
-        console.log('Starting real packet monitoring with options:', options);
         this.startRealPacketCapture(options);
       });
       
       socket.on('stop-monitoring', () => {
-        console.log('Stopping real packet monitoring');
         this.stopRealPacketCapture();
       });
 
@@ -198,9 +195,13 @@ class PacketMonitor {
         const id = this.database.addTrafficRule(rule);
         const success = !!id;
         
-        if (success && rule.action === 'block') {
-          // Apply system-level blocking
-          this.applySystemLevelBlocking(rule.ip, 'block');
+        if (success) {
+          // Apply system-level traffic control
+          if (rule.action === 'block') {
+            this.applySystemLevelTrafficControl(rule.ip, 'block');
+          } else if (rule.action === 'throttle') {
+            this.applySystemLevelTrafficControl(rule.ip, 'throttle', rule.delay);
+          }
         }
         
         socket.emit('traffic-rule-added', { success, id, rule });
@@ -226,9 +227,11 @@ class PacketMonitor {
         if (success && rule && rule.action === 'block') {
           // Apply or remove system-level blocking based on status
           if (status === 'active') {
-            this.applySystemLevelBlocking(rule.ip, 'block');
+            this.applySystemLevelTrafficControl(rule.ip, 'block');
+          } else if (rule.action === 'throttle') {
+            this.applySystemLevelTrafficControl(rule.ip, 'throttle', rule.delay);
           } else {
-            this.applySystemLevelBlocking(rule.ip, 'unblock');
+            this.applySystemLevelTrafficControl(rule.ip, 'unblock');
           }
         }
         
@@ -245,9 +248,13 @@ class PacketMonitor {
         
         const success = this.database.removeTrafficRule(ruleId);
         
-        if (success && rule && rule.action === 'block') {
-          // Remove system-level blocking
-          this.applySystemLevelBlocking(rule.ip, 'unblock');
+        if (success && rule) {
+          // Remove system-level traffic control
+          if (rule.action === 'block') {
+            this.applySystemLevelTrafficControl(rule.ip, 'unblock');
+          } else if (rule.action === 'throttle') {
+            this.applySystemLevelTrafficControl(rule.ip, 'unthrottle');
+          }
         }
         
         socket.emit('traffic-rule-removed', { success, ruleId });
@@ -257,7 +264,6 @@ class PacketMonitor {
       });
       
       socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
         this.connectedClients.delete(socket);
         
         // Stop monitoring if no clients connected
@@ -273,7 +279,6 @@ class PacketMonitor {
     exec('which tshark', (error) => {
       this.hasTshark = !error;
       if (this.hasTshark) {
-        console.log('✓ tshark available for real packet capture');
         this.captureMethod = 'tshark';
       }
     });
@@ -282,7 +287,6 @@ class PacketMonitor {
     exec('which tcpdump', (error) => {
       this.hasTcpdump = !error;
       if (this.hasTcpdump && !this.hasTshark) {
-        console.log('✓ tcpdump available for real packet capture');
         this.captureMethod = 'tcpdump';
       }
     });
@@ -315,9 +319,6 @@ class PacketMonitor {
     
     // Also add localhost for protection
     this.attackDetection.localIPs.add('127.0.0.1');
-    
-    console.log('Available network interfaces:', this.networkInterfaces);
-    console.log('🛡️  Protected local IPs:', Array.from(this.attackDetection.localIPs));
   }
 
   initializeAttackDetection() {
@@ -1167,10 +1168,10 @@ class PacketMonitor {
     this.io.emit('capture-error', { message });
   }
 
-  // System-level IP blocking using iptables (Linux only)
-  applySystemLevelBlocking(ip, action = 'block') {
+  // System-level traffic control using iptables - Simplified and reliable
+  applySystemLevelTrafficControl(ip, action = 'block', delay = null) {
     if (os.platform() !== 'linux') {
-      console.log('⚠️  System-level blocking only supported on Linux');
+      console.log('⚠️  System-level traffic control only supported on Linux');
       return false;
     }
 
@@ -1179,55 +1180,668 @@ class PacketMonitor {
     const sudoPrefix = isRoot ? '' : 'sudo ';
 
     if (action === 'block') {
-      // Check if rule already exists before adding
-      const checkCommand = `${sudoPrefix}iptables -C INPUT -s ${ip} -j DROP 2>/dev/null`;
-      exec(checkCommand, (checkError) => {
-        if (checkError) {
-          // Rule doesn't exist, add it
-          const addCommand = `${sudoPrefix}iptables -A INPUT -s ${ip} -j DROP`;
-          exec(addCommand, { timeout: 5000 }, (error, stdout, stderr) => {
-            if (error) {
-              if (error.message.includes('permission denied') || error.message.includes('EACCES')) {
-                console.error(`❌ Permission denied: Run with 'sudo npm run dev:full' or configure passwordless sudo for iptables`);
-                console.log(`💡 To fix: sudo echo "$(whoami) ALL=(ALL) NOPASSWD: /usr/bin/iptables" | sudo tee /etc/sudoers.d/netguardian-iptables`);
-              } else {
-                console.error(`❌ Failed to block IP ${ip} at system level:`, error.message);
-              }
-            } else {
-              console.log(`🛡️ System-level block applied for IP: ${ip}`);
-            }
-          });
-        } else {
-          console.log(`🛡️ System-level block already exists for IP: ${ip}`);
-        }
-      });
-    } else if (action === 'unblock') {
-      // Remove iptables rule (ignore errors if rule doesn't exist)
-      const removeCommand = `${sudoPrefix}iptables -D INPUT -s ${ip} -j DROP`;
-      exec(removeCommand, { timeout: 5000 }, (error, stdout, stderr) => {
+      // Simple blocking: just add DROP rule
+      const blockCommand = `${sudoPrefix}iptables -I INPUT -s ${ip} -j DROP`;
+      exec(blockCommand, { timeout: 5000 }, (error) => {
         if (error) {
           if (error.message.includes('permission denied') || error.message.includes('EACCES')) {
             console.error(`❌ Permission denied: Run with 'sudo npm run dev:full' or configure passwordless sudo for iptables`);
-          } else if (!error.message.includes('No chain/target/match')) {
-            console.error(`❌ Failed to unblock IP ${ip} at system level:`, error.message);
           } else {
-            console.log(`🛡️ System-level block for IP ${ip} was already removed`);
+            console.error(`❌ Failed to block IP ${ip}:`, error.message);
           }
         } else {
-          console.log(`🛡️ System-level block removed for IP: ${ip}`);
+          console.log(`🛡️ Successfully blocked IP: ${ip}`);
         }
+      });
+      
+    } else if (action === 'unblock') {
+      // Remove blocking rule
+      const unblockCommand = `${sudoPrefix}iptables -D INPUT -s ${ip} -j DROP 2>/dev/null`;
+      exec(unblockCommand, { timeout: 5000 }, (error) => {
+        console.log(`🛡️ Unblocked IP: ${ip}`);
+      });
+      
+    } else if (action === 'throttle' && delay) {
+      // Apply cyclic throttling
+      console.log(`⏱️ Starting cyclic throttling for IP: ${ip} with ${delay}ms intervals`);
+      this.startCyclicThrottling(ip, delay, sudoPrefix);
+      
+    } else if (action === 'unthrottle') {
+      // Stop cyclic throttling
+      console.log(`⏱️ Stopping throttling for IP: ${ip}`);
+      this.stopCyclicThrottling(ip);
+      const unblockCommand = `${sudoPrefix}iptables -D INPUT -s ${ip} -j DROP 2>/dev/null`;
+      exec(unblockCommand, { timeout: 5000 }, () => {
+        console.log(`⏱️ Throttling removed for IP: ${ip}`);
       });
     }
   }
 
-    // Clean up any existing NetGuardian iptables rules
+  // Clean up all iptables rules for a specific IP
+  cleanupIptablesRulesForIP(ip, sudoPrefix, callback) {
+    console.log(`🧹 Cleaning up all iptables rules for IP: ${ip}`);
+    
+    // Get all rules for this IP and remove them
+    const listCommand = `${sudoPrefix}iptables -L INPUT --line-numbers -n | grep ${ip}`;
+    
+    exec(listCommand, { timeout: 5000 }, (error, stdout, stderr) => {
+      if (error || !stdout.trim()) {
+        // No rules found, continue
+        callback();
+        return;
+      }
+      
+      // Parse line numbers and remove rules (from highest to lowest to maintain numbering)
+      const lines = stdout.trim().split('\n');
+      const lineNumbers = lines.map(line => {
+        const match = line.match(/^(\d+)/);
+        return match ? parseInt(match[1]) : null;
+      }).filter(num => num !== null).sort((a, b) => b - a); // Sort descending
+      
+      let removedCount = 0;
+      
+      if (lineNumbers.length === 0) {
+        callback();
+        return;
+      }
+      
+      lineNumbers.forEach((lineNum, index) => {
+        const removeCommand = `${sudoPrefix}iptables -D INPUT ${lineNum}`;
+        exec(removeCommand, { timeout: 5000 }, (error) => {
+          removedCount++;
+          if (removedCount === lineNumbers.length) {
+            console.log(`🧹 Removed ${lineNumbers.length} iptables rules for IP: ${ip}`);
+            callback();
+          }
+        });
+      });
+    });
+  }
+
+  // Apply traffic shaping - Now uses cyclic blocking
+  applyTrafficShaping(ip, delayMs, sudoPrefix) {
+    console.log(`🔧 Applying cyclic blocking throttling for IP: ${ip} with ${delayMs}ms intervals`);
+    
+    this.startCyclicThrottling(ip, delayMs, sudoPrefix);
+  }
+
+  // Unused methods - kept for compatibility but redirect to cyclic throttling
+  applyDirectNetemThrottling(ip, delayMs, networkInterface, sudoPrefix) {
+    console.log(`🔧 Redirecting to cyclic throttling for ${ip}: ${delayMs}ms`);
+    this.startCyclicThrottling(ip, delayMs, sudoPrefix);
+  }
+
+  applyInterfaceWideThrottling(ip, delayMs, networkInterface, sudoPrefix) {
+    console.log(`🔧 Redirecting to cyclic throttling for ${ip}: ${delayMs}ms`);
+    this.startCyclicThrottling(ip, delayMs, sudoPrefix);
+  }
+
+  applyHTBBasedThrottling(ip, delayMs, networkInterface, sudoPrefix) {
+    console.log(`🔧 Setting up HTB-based throttling for ${ip}: ${delayMs}ms`);
+    
+    // Step 1: Create a simple HTB root qdisc
+    const setupRoot = `${sudoPrefix}tc qdisc add dev ${networkInterface} root handle 1: htb default 30`;
+    
+    exec(setupRoot, { timeout: 5000 }, (rootError) => {
+      if (rootError && !rootError.message.includes('exists')) {
+        console.log(`⚠️ Could not setup HTB root, trying prio: ${rootError.message}`);
+        this.applyPrioBasedThrottling(ip, delayMs, networkInterface, sudoPrefix);
+        return;
+      }
+      
+      // Step 2: Create a class for throttled traffic
+      const classId = this.ipToClassId(ip);
+      const createClass = `${sudoPrefix}tc class add dev ${networkInterface} parent 1: classid 1:${classId} htb rate 10mbit ceil 10mbit`;
+      
+      exec(createClass, { timeout: 5000 }, (classError) => {
+        // Step 3: Add netem delay to this class
+        const addNetem = `${sudoPrefix}tc qdisc add dev ${networkInterface} parent 1:${classId} handle ${classId}0: netem delay ${delayMs}ms`;
+        
+        exec(addNetem, { timeout: 5000 }, (netemError) => {
+          if (netemError) {
+            console.log(`⚠️ Netem failed, trying simpler approach: ${netemError.message}`);
+            this.applyPrioBasedThrottling(ip, delayMs, networkInterface, sudoPrefix);
+            return;
+          }
+          
+          // Step 4: Add filter to direct traffic from/to this IP to the delayed class
+          this.addTrafficFilters(ip, networkInterface, classId, sudoPrefix);
+        });
+      });
+    });
+  }
+
+  applyPrioBasedThrottling(ip, delayMs, networkInterface, sudoPrefix) {
+    console.log(`🔧 Setting up comprehensive priority-based throttling for ${ip}: ${delayMs}ms`);
+    
+    // Clean up existing rules first
+    exec(`${sudoPrefix}tc qdisc del dev ${networkInterface} root 2>/dev/null`, () => {
+      
+      // Use a comprehensive approach that catches ALL packets
+      const setupPrio = `${sudoPrefix}tc qdisc add dev ${networkInterface} root handle 1: prio bands 4 priomap 0 1 2 3 0 1 2 3 0 1 2 3 0 1 2 3`;
+      
+      exec(setupPrio, { timeout: 5000 }, (prioError) => {
+        if (prioError) {
+          console.log(`❌ Priority qdisc failed: ${prioError.message}`);
+          return;
+        }
+        
+        // Add netem delay to ALL bands that might handle this traffic
+        const addNetem1 = `${sudoPrefix}tc qdisc add dev ${networkInterface} parent 1:1 handle 10: netem delay ${delayMs}ms`;
+        const addNetem2 = `${sudoPrefix}tc qdisc add dev ${networkInterface} parent 1:2 handle 20: netem delay ${delayMs}ms`;
+        const addNetem3 = `${sudoPrefix}tc qdisc add dev ${networkInterface} parent 1:3 handle 30: netem delay ${delayMs}ms`;
+        
+        exec(addNetem1, { timeout: 5000 }, (netem1Error) => {
+          exec(addNetem2, { timeout: 5000 }, (netem2Error) => {
+            exec(addNetem3, { timeout: 5000 }, (netem3Error) => {
+              
+              // Add comprehensive filters that catch packets in both directions and all protocols
+              this.addComprehensiveFilters(ip, networkInterface, sudoPrefix);
+              
+            });
+          });
+        });
+      });
+    });
+  }
+
+  addComprehensiveFilters(ip, networkInterface, sudoPrefix) {
+    console.log(`🔧 Adding comprehensive filters for ${ip} on ${networkInterface}`);
+    
+    // Add multiple filters to catch all possible packet paths
+    const filters = [
+      // ICMP packets (ping)
+      `${sudoPrefix}tc filter add dev ${networkInterface} protocol ip parent 1: prio 1 u32 match ip src ${ip} match ip protocol 1 0xff flowid 1:1`,
+      `${sudoPrefix}tc filter add dev ${networkInterface} protocol ip parent 1: prio 1 u32 match ip dst ${ip} match ip protocol 1 0xff flowid 1:1`,
+      
+      // TCP packets  
+      `${sudoPrefix}tc filter add dev ${networkInterface} protocol ip parent 1: prio 2 u32 match ip src ${ip} match ip protocol 6 0xff flowid 1:2`,
+      `${sudoPrefix}tc filter add dev ${networkInterface} protocol ip parent 1: prio 2 u32 match ip dst ${ip} match ip protocol 6 0xff flowid 1:2`,
+      
+      // UDP packets
+      `${sudoPrefix}tc filter add dev ${networkInterface} protocol ip parent 1: prio 3 u32 match ip src ${ip} match ip protocol 17 0xff flowid 1:3`,
+      `${sudoPrefix}tc filter add dev ${networkInterface} protocol ip parent 1: prio 3 u32 match ip dst ${ip} match ip protocol 17 0xff flowid 1:3`,
+      
+      // Catch-all for any remaining packets
+      `${sudoPrefix}tc filter add dev ${networkInterface} protocol ip parent 1: prio 4 u32 match ip src ${ip} flowid 1:1`,
+      `${sudoPrefix}tc filter add dev ${networkInterface} protocol ip parent 1: prio 4 u32 match ip dst ${ip} flowid 1:1`
+    ];
+    
+    let successCount = 0;
+    let totalFilters = filters.length;
+    
+    filters.forEach((filterCmd, index) => {
+      exec(filterCmd, { timeout: 5000 }, (error) => {
+        if (!error) successCount++;
+        
+        // When all filters are processed
+        if (index === totalFilters - 1) {
+          console.log(`⏱️ Comprehensive throttling applied for IP ${ip} with ${delayMs}ms delay`);
+          console.log(`📊 Filter success: ${successCount}/${totalFilters} filters applied`);
+          
+          // Test the setup
+          setTimeout(() => {
+            this.testThrottlingSetup(networkInterface, sudoPrefix);
+          }, 2000);
+        }
+      });
+    });
+  }
+
+  addTrafficFilters(ip, networkInterface, classId, sudoPrefix) {
+    // Add filters to match traffic to/from the specific IP
+    const filter1 = `${sudoPrefix}tc filter add dev ${networkInterface} protocol ip parent 1: prio 1 u32 match ip src ${ip} flowid 1:${classId}`;
+    const filter2 = `${sudoPrefix}tc filter add dev ${networkInterface} protocol ip parent 1: prio 1 u32 match ip dst ${ip} flowid 1:${classId}`;
+    
+    exec(filter1, { timeout: 5000 }, (f1Error) => {
+      exec(filter2, { timeout: 5000 }, (f2Error) => {
+        console.log(`⏱️ HTB-based throttling applied for IP ${ip}`);
+        console.log(`📊 Filter results: src=${f1Error ? 'FAILED' : 'OK'}, dst=${f2Error ? 'FAILED' : 'OK'}`);
+        
+        if (f1Error) console.log(`   src filter error: ${f1Error.message}`);
+        if (f2Error) console.log(`   dst filter error: ${f2Error.message}`);
+        
+        // Test the setup
+        setTimeout(() => {
+          this.testThrottlingSetup(networkInterface, sudoPrefix);
+        }, 2000);
+      });
+    });
+  }
+
+  cleanupTrafficControlForInterface(networkInterface, sudoPrefix) {
+    // Clean up any existing tc rules
+    exec(`${sudoPrefix}tc qdisc del dev ${networkInterface} root 2>/dev/null`, () => {
+      // Ignore errors
+    });
+  }
+
+  // Alternative throttling approach using iptables with more aggressive rate limiting
+  applyAlternativeThrottling(ip, delayMs, sudoPrefix) {
+    console.log(`🔧 Applying aggressive iptables-based throttling for ${ip}: ${delayMs}ms delay`);
+    
+    // Convert delay to a very strict rate limit for consistent delays
+    // For ping packets, we want to severely limit the rate to simulate delay
+    const packetsPerSecond = Math.max(1, Math.floor(500 / delayMs)); // More aggressive calculation
+    const burstSize = 1; // Very small burst to ensure consistent delays
+    
+    // Use iptables with hashlimit module for very strict rate limiting
+    const rateLimitRule = `${sudoPrefix}iptables -I INPUT -s ${ip} -m hashlimit --hashlimit-above ${packetsPerSecond}/sec --hashlimit-burst ${burstSize} --hashlimit-mode srcip --hashlimit-name throttle_${ip.replace(/\./g, '_')} -j DROP`;
+    
+    exec(rateLimitRule, { timeout: 5000 }, (rateLimitError) => {
+      if (rateLimitError) {
+        console.log(`⚠️ Rate limiting failed: ${rateLimitError.message}`);
+        this.applyConnectionBasedThrottling(ip, delayMs, sudoPrefix);
+      } else {
+        console.log(`⏱️ Aggressive rate limiting applied for IP ${ip}: max ${packetsPerSecond} packets/sec (burst: ${burstSize})`);
+      }
+    });
+    
+    // Also apply OUTPUT rate limiting with the same aggressive settings
+    const outputRateLimitRule = `${sudoPrefix}iptables -I OUTPUT -d ${ip} -m hashlimit --hashlimit-above ${packetsPerSecond}/sec --hashlimit-burst ${burstSize} --hashlimit-mode dstip --hashlimit-name throttle_out_${ip.replace(/\./g, '_')} -j DROP`;
+    
+    exec(outputRateLimitRule, { timeout: 5000 }, (outputError) => {
+      if (!outputError) {
+        console.log(`⏱️ Aggressive output rate limiting applied for IP ${ip}: max ${packetsPerSecond} packets/sec`);
+      }
+    });
+
+    // Add additional ICMP-specific throttling for ping packets
+    this.applyICMPThrottling(ip, delayMs, sudoPrefix);
+  }
+
+  // Cyclic blocking throttling - blocks for X seconds, then unblocks for X seconds
+  applySimpleIptablesThrottling(ip, delayMs, sudoPrefix) {
+    console.log(`� Setting up cyclic blocking throttling for ${ip}: ${delayMs}ms intervals`);
+    
+    // Clean up any existing rules and intervals for this IP first
+    this.cleanupIptablesRulesForIP(ip, sudoPrefix);
+    this.stopCyclicThrottling(ip);
+    
+    // Initialize cyclic intervals storage if not exists
+    if (!this.cyclicIntervals) {
+      this.cyclicIntervals = {};
+    }
+    
+    const intervalKey = `cyclic_${ip.replace(/\./g, '_')}`;
+    let isBlocked = false;
+    
+    // Function to toggle block/unblock
+    const toggleBlock = () => {
+      if (isBlocked) {
+        // Unblock: Remove DROP rule
+        const unblockCmd = `${sudoPrefix}iptables -D INPUT -s ${ip} -j DROP 2>/dev/null || true`;
+        exec(unblockCmd, { timeout: 3000 }, (error) => {
+          console.log(`🔓 Unblocked ${ip} for ${delayMs}ms (allowing traffic)`);
+        });
+        isBlocked = false;
+      } else {
+        // Block: Add DROP rule
+        const blockCmd = `${sudoPrefix}iptables -I INPUT -s ${ip} -j DROP`;
+        exec(blockCmd, { timeout: 3000 }, (error) => {
+          if (!error) {
+            console.log(`🔒 Blocked ${ip} for ${delayMs}ms (dropping packets)`);
+          } else {
+            console.log(`⚠️ Block failed for ${ip}: ${error.message}`);
+          }
+        });
+        isBlocked = true;
+      }
+    };
+    
+    // Start the cycling interval
+    console.log(`🔄 Starting cyclic throttling: ${delayMs}ms blocked → ${delayMs}ms unblocked → repeat`);
+    
+    this.cyclicIntervals[intervalKey] = setInterval(toggleBlock, delayMs);
+    
+    // Start with unblocked state, then block after a short delay
+    setTimeout(toggleBlock, 500);
+    
+    console.log(`⏱️ Cyclic blocking throttling active for ${ip} (${delayMs / 1000}s intervals)`);
+  }
+
+  applyICMPThrottling(ip, packetsPerSecond, intervalSeconds, sudoPrefix) {
+    console.log(`🎯 Applying ICMP throttling for ${ip}: ${packetsPerSecond} packets per ${intervalSeconds}s`);
+    
+    // Use a very simple approach - for high delays, use very low rates
+    let limitString = "1/second"; // Default to 1 per second
+    
+    if (intervalSeconds >= 5) {
+      limitString = "1/minute"; // Very slow for long delays
+    } else if (intervalSeconds >= 2) {
+      limitString = "1/second"; // 1 per second for medium delays
+    } else {
+      limitString = `${Math.min(5, packetsPerSecond)}/second`; // Max 5 per second
+    }
+    
+    console.log(`🎯 Using simple iptables limit: ${limitString}`);
+    
+    // ICMP INPUT throttling (ping responses TO us FROM the target IP)
+    const icmpInputRule = `${sudoPrefix}iptables -A INPUT -s ${ip} -p icmp -m limit --limit ${limitString} --limit-burst 1 -j ACCEPT`;
+    const icmpInputDrop = `${sudoPrefix}iptables -A INPUT -s ${ip} -p icmp -j DROP`;
+    
+    // ICMP OUTPUT throttling (ping requests FROM us TO the target IP)  
+    const icmpOutputRule = `${sudoPrefix}iptables -A OUTPUT -d ${ip} -p icmp -m limit --limit ${limitString} --limit-burst 1 -j ACCEPT`;
+    const icmpOutputDrop = `${sudoPrefix}iptables -A OUTPUT -d ${ip} -p icmp -j DROP`;
+    
+    // Apply the rules (accept first with limit, then drop the rest)
+    exec(icmpInputRule, { timeout: 5000 }, (error1) => {
+      exec(icmpInputDrop, { timeout: 5000 }, (error2) => {
+        exec(icmpOutputRule, { timeout: 5000 }, (error3) => {
+          exec(icmpOutputDrop, { timeout: 5000 }, (error4) => {
+            const errors = [error1, error2, error3, error4].filter(e => e);
+            if (errors.length === 0) {
+              console.log(`✅ ICMP throttling rules applied successfully for ${ip}`);
+            } else {
+              console.log(`⚠️ Some ICMP rules failed: ${errors.length}/4 errors`);
+              errors.forEach(err => console.log(`   Error: ${err.message}`));
+            }
+            
+            // Show what rules were actually applied
+            setTimeout(() => {
+              exec(`${sudoPrefix}iptables -L INPUT -n | grep ${ip}`, { timeout: 3000 }, (error, stdout) => {
+                if (!error && stdout) {
+                  console.log(`🔍 Applied INPUT rules for ${ip}:`);
+                  console.log(stdout);
+                }
+              });
+            }, 1000);
+          });
+        });
+      });
+    });
+  }
+
+  applyGeneralTrafficThrottling(ip, packetsPerSecond, intervalSeconds, sudoPrefix) {
+    console.log(`🌐 Applying general traffic throttling for ${ip}`);
+    
+    // Use simple rate limiting for all traffic
+    let limitString = "2/second"; // Default
+    
+    if (intervalSeconds >= 5) {
+      limitString = "5/minute"; // Very slow for long delays
+    } else if (intervalSeconds >= 2) {
+      limitString = "2/second"; // Moderate for medium delays  
+    } else {
+      limitString = `${Math.min(10, packetsPerSecond * 2)}/second`; // Higher rate for general traffic
+    }
+    
+    // General INPUT throttling (all traffic FROM the target IP)
+    const inputRule = `${sudoPrefix}iptables -A INPUT -s ${ip} -m limit --limit ${limitString} --limit-burst 3 -j ACCEPT`;
+    const inputDrop = `${sudoPrefix}iptables -A INPUT -s ${ip} -j DROP`;
+    
+    // General OUTPUT throttling (all traffic TO the target IP)
+    const outputRule = `${sudoPrefix}iptables -A OUTPUT -d ${ip} -m limit --limit ${limitString} --limit-burst 3 -j ACCEPT`;
+    const outputDrop = `${sudoPrefix}iptables -A OUTPUT -d ${ip} -j DROP`;
+    
+    exec(inputRule, { timeout: 5000 }, () => {
+      exec(inputDrop, { timeout: 5000 }, () => {
+        exec(outputRule, { timeout: 5000 }, () => {
+          exec(outputDrop, { timeout: 5000 }, () => {
+            console.log(`✅ General traffic throttling applied for ${ip}`);
+          });
+        });
+      });
+    });
+  }
+
+  startCyclicThrottling(ip, delayMs, sudoPrefix) {
+    // Initialize cyclic intervals storage if not exists
+    if (!this.cyclicIntervals) {
+      this.cyclicIntervals = {};
+    }
+    
+    const intervalKey = `cyclic_${ip.replace(/\./g, '_')}`;
+    
+    // Clear any existing interval for this IP
+    if (this.cyclicIntervals[intervalKey]) {
+      clearInterval(this.cyclicIntervals[intervalKey]);
+    }
+    
+    let isBlocked = false;
+    
+    // Function to toggle block/unblock
+    const toggleBlock = () => {
+      if (isBlocked) {
+        // Unblock: Remove DROP rule
+        const unblockCmd = `${sudoPrefix}iptables -D INPUT -s ${ip} -j DROP 2>/dev/null`;
+        exec(unblockCmd, { timeout: 3000 }, () => {
+          console.log(`🔓 ${ip} unblocked for ${delayMs}ms`);
+        });
+        isBlocked = false;
+      } else {
+        // Block: Add DROP rule
+        const blockCmd = `${sudoPrefix}iptables -I INPUT -s ${ip} -j DROP`;
+        exec(blockCmd, { timeout: 3000 }, (error) => {
+          if (!error) {
+            console.log(`🔒 ${ip} blocked for ${delayMs}ms`);
+          }
+        });
+        isBlocked = true;
+      }
+    };
+    
+    // Start the cycling
+    console.log(`🔄 Cyclic throttling started: ${delayMs}ms blocked → ${delayMs}ms unblocked`);
+    this.cyclicIntervals[intervalKey] = setInterval(toggleBlock, delayMs);
+    
+    // Start with first block after a short delay
+    setTimeout(toggleBlock, 500);
+  }
+
+  stopCyclicThrottling(ip) {
+    if (!this.cyclicIntervals) return;
+    
+    const intervalKey = `cyclic_${ip.replace(/\./g, '_')}`;
+    
+    if (this.cyclicIntervals[intervalKey]) {
+      clearInterval(this.cyclicIntervals[intervalKey]);
+      delete this.cyclicIntervals[intervalKey];
+      console.log(`🛑 Stopped cyclic throttling for ${ip}`);
+    }
+  }
+
+  cleanupIptablesRulesForIP(ip, sudoPrefix) {
+    console.log(`🧹 Cleaning up existing iptables rules for ${ip}`);
+    
+    // Stop any cyclic throttling for this IP
+    this.stopCyclicThrottling(ip);
+    
+    // Remove any existing rules for this IP (ignore errors)
+    const cleanupCommands = [
+      `${sudoPrefix}iptables -D INPUT -s ${ip} -p icmp -j DROP 2>/dev/null || true`,
+      `${sudoPrefix}iptables -D INPUT -s ${ip} -p icmp -m limit -j ACCEPT 2>/dev/null || true`,
+      `${sudoPrefix}iptables -D OUTPUT -d ${ip} -p icmp -j DROP 2>/dev/null || true`,
+      `${sudoPrefix}iptables -D OUTPUT -d ${ip} -p icmp -m limit -j ACCEPT 2>/dev/null || true`,
+      `${sudoPrefix}iptables -D INPUT -s ${ip} -j DROP 2>/dev/null || true`,
+      `${sudoPrefix}iptables -D INPUT -s ${ip} -m limit -j ACCEPT 2>/dev/null || true`,
+      `${sudoPrefix}iptables -D OUTPUT -d ${ip} -j DROP 2>/dev/null || true`,
+      `${sudoPrefix}iptables -D OUTPUT -d ${ip} -m limit -j ACCEPT 2>/dev/null || true`
+    ];
+    
+    cleanupCommands.forEach(cmd => {
+      exec(cmd, { timeout: 3000 }, () => {
+        // Ignore all errors during cleanup
+      });
+    });
+  }
+
+  // Connection-based throttling using iptables connlimit
+  applyConnectionBasedThrottling(ip, delayMs, sudoPrefix) {
+    console.log(`🔧 Applying connection-based throttling for ${ip}`);
+    
+    // Limit concurrent connections based on delay
+    const maxConnections = Math.max(1, Math.floor(10000 / delayMs));
+    
+    const connLimitRule = `${sudoPrefix}iptables -A INPUT -s ${ip} -m connlimit --connlimit-above ${maxConnections} -j REJECT --reject-with tcp-reset`;
+    
+    exec(connLimitRule, { timeout: 5000 }, (connError) => {
+      if (connError) {
+        console.log(`⚠️ Connection throttling failed: ${connError.message}`);
+        console.log(`🔧 Falling back to application-level throttling only`);
+      } else {
+        console.log(`⏱️ Connection-based throttling applied for IP ${ip}: max ${maxConnections} connections`);
+      }
+    });
+  }
+
+  // Remove traffic shaping - Simplified for cyclic blocking
+  removeTrafficShaping(ip, sudoPrefix) {
+    console.log(`🔧 Removing throttling for IP: ${ip}`);
+    
+    // Stop cyclic throttling and remove any blocking rules
+    this.stopCyclicThrottling(ip);
+    
+    // Remove any remaining DROP rules for this IP
+    const unblockCommand = `${sudoPrefix}iptables -D INPUT -s ${ip} -j DROP 2>/dev/null || true`;
+    exec(unblockCommand, { timeout: 5000 }, () => {
+      console.log(`⏱️ Throttling completely removed for IP: ${ip}`);
+    });
+  }
+
+  showCurrentIptablesRules(sudoPrefix) {
+    exec(`${sudoPrefix}iptables -L INPUT -n --line-numbers | head -20`, { timeout: 5000 }, (error, stdout) => {
+      if (!error && stdout) {
+        console.log(`🔍 Current INPUT rules (first 20):`);
+        console.log(stdout);
+      }
+    });
+    
+    exec(`${sudoPrefix}iptables -L OUTPUT -n --line-numbers | head -20`, { timeout: 5000 }, (error, stdout) => {
+      if (!error && stdout) {
+        console.log(`🔍 Current OUTPUT rules (first 20):`);
+        console.log(stdout);
+      }
+    });
+  }
+
+  // Convert IP address to a unique class ID (simplified)
+  ipToClassId(ip) {
+    const parts = ip.split('.');
+    return parseInt(parts[parts.length - 1]) + 100; // Simple mapping using last octet
+  }
+
+  // Convert IP address to a unique handle for tc
+  ipToHandle(ip) {
+    const parts = ip.split('.');
+    return parseInt(parts[parts.length - 1]) + 200; // Different range from classId
+  }
+
+  // Convert IP address to a unique mark for iptables
+  ipToMark(ip) {
+    const parts = ip.split('.');
+    return parseInt(parts[parts.length - 1]) + 1000; // Different range for marks
+  }
+
+  // Convert IP address to a unique mark value (same as ipToMark but clearer name)
+  ipToMarkValue(ip) {
+    return this.ipToMark(ip);
+  }
+
+  // Test if throttling setup is working
+  testThrottlingSetup(networkInterface, sudoPrefix) {
+    const testCommand = `${sudoPrefix}tc qdisc show dev ${networkInterface}`;
+    exec(testCommand, { timeout: 5000 }, (error, stdout, stderr) => {
+      if (error) {
+        console.log(`⚠️ Could not verify throttling setup: ${error.message}`);
+      } else {
+        console.log(`🔍 Traffic control status for ${networkInterface}:`);
+        console.log(stdout);
+      }
+    });
+  }
+
+  // Determine which network interface an IP routes through
+  getInterfaceForIP(ip, callback) {
+    const routeCommand = `ip route get ${ip}`;
+    exec(routeCommand, { timeout: 3000 }, (error, stdout, stderr) => {
+      if (error) {
+        console.log(`⚠️ Could not determine route for ${ip}: ${error.message}`);
+        callback(null);
+        return;
+      }
+      
+      // Parse the output to extract the interface name
+      // Example output: "8.8.8.8 via 192.168.1.1 dev wlo1 src 192.168.1.4"
+      const match = stdout.match(/dev\s+(\w+)/);
+      if (match && match[1]) {
+        const interfaceName = match[1];
+        console.log(`🔍 IP ${ip} routes through interface: ${interfaceName}`);
+        callback(interfaceName);
+      } else {
+        console.log(`⚠️ Could not parse interface from route output: ${stdout}`);
+        callback(null);
+      }
+    });
+  }
+
+  // Get the primary network interface (not loopback)
+  getPrimaryNetworkInterface() {
+    // Try to find the interface from our stored network interfaces
+    for (const iface of this.networkInterfaces) {
+      if (iface.name !== 'lo' && !iface.name.startsWith('virbr') && !iface.name.startsWith('docker')) {
+        return iface.name;
+      }
+    }
+    
+    // Fallback: try common interface names
+    const commonInterfaces = ['eth0', 'wlan0', 'wlo1', 'enp0s3', 'ens33'];
+    for (const ifaceName of commonInterfaces) {
+      try {
+        const interfaces = require('os').networkInterfaces();
+        if (interfaces[ifaceName]) {
+          return ifaceName;
+        }
+      } catch (error) {
+        // Continue to next interface
+      }
+    }
+    
+    return null;
+  }
+
+  // Debug method to show current traffic control rules
+  debugTrafficControl(interfaceName, sudoPrefix) {
+    console.log(`🔍 Debugging traffic control rules on ${interfaceName}:`);
+    
+    // Show tc qdisc rules
+    exec(`${sudoPrefix}tc qdisc show dev ${interfaceName}`, { timeout: 5000 }, (error, stdout) => {
+      if (!error && stdout.trim()) {
+        console.log('📋 tc qdisc rules:');
+        console.log(stdout);
+      }
+    });
+    
+    exec(`${sudoPrefix}tc class show dev ${interfaceName}`, { timeout: 5000 }, (error, stdout) => {
+      if (!error && stdout.trim()) {
+        console.log('📋 tc class rules:');
+        console.log(stdout);
+      }
+    });
+    
+    exec(`${sudoPrefix}tc filter show dev ${interfaceName}`, { timeout: 5000 }, (error, stdout) => {
+      if (!error && stdout.trim()) {
+        console.log('📋 tc filter rules:');
+        console.log(stdout);
+      }
+    });
+    
+    // Test with ping to see if delay is working
+    setTimeout(() => {
+      console.log('🧪 Testing if traffic control is working...');
+      console.log('💡 Try: ping [throttled_ip] to test delays');
+      console.log('💡 Or: curl -w "@timing.txt" http://[throttled_ip] (if it\'s a web server)');
+    }, 2000);
+  }
+
+  // Clean up any existing NetGuardian iptables and traffic control rules
   cleanupSystemRules() {
     if (os.platform() !== 'linux') return;
 
     const isRoot = process.getuid && process.getuid() === 0;
     const sudoPrefix = isRoot ? '' : 'sudo ';
 
-    // List all iptables rules and remove NetGuardian-related rules
+    // Clean up iptables rules
     const listCommand = `${sudoPrefix}iptables -L INPUT --line-numbers -n`;
     exec(listCommand, { timeout: 10000 }, (error, stdout, stderr) => {
       if (error) {
@@ -1261,12 +1875,30 @@ class PacketMonitor {
           const removeCommand = `${sudoPrefix}iptables -D INPUT ${rule.lineNumber}`;
           exec(removeCommand, { timeout: 5000 }, (error) => {
             if (!error) {
-              console.log(`🧹 Removed old rule for IP: ${rule.ip}`);
+              console.log(`🧹 Removed old iptables rule for IP: ${rule.ip}`);
             }
           });
         });
       }
     });
+
+    // Clean up traffic control rules on primary interface
+    const primaryInterface = this.getPrimaryNetworkInterface();
+    if (primaryInterface) {
+      const tcCleanupCommands = [
+        `${sudoPrefix}tc qdisc del dev ${primaryInterface} root 2>/dev/null || true`,
+        `${sudoPrefix}tc qdisc del dev ${primaryInterface} ingress 2>/dev/null || true`,
+        `${sudoPrefix}tc qdisc del dev ifb0 root 2>/dev/null || true`
+      ];
+      
+      tcCleanupCommands.forEach((command, index) => {
+        exec(command, { timeout: 5000 }, (error) => {
+          if (!error && index === 0) {
+            console.log(`🧹 Cleaned up existing traffic control rules on ${primaryInterface}`);
+          }
+        });
+      });
+    }
   }
 
   // Apply all active blocking rules at startup
@@ -1281,7 +1913,14 @@ class PacketMonitor {
         console.log(`🛡️ Applying system-level blocking for ${blockedIps.length} IPs...`);
         
         blockedIps.forEach(ip => {
-          this.applySystemLevelBlocking(ip, 'block');
+          this.applySystemLevelTrafficControl(ip, 'block');
+        });
+        
+        // Also apply throttling rules
+        const throttledIps = this.database.getActiveThrottledIps();
+        console.log(`⏱️ Applying system-level throttling for ${throttledIps.length} IPs...`);
+        throttledIps.forEach(({ip, delay}) => {
+          this.applySystemLevelTrafficControl(ip, 'throttle', delay);
         });
       }, 2000);
     } catch (error) {
