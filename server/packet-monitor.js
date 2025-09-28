@@ -4,6 +4,7 @@ const { spawn, exec } = require('child_process');
 const os = require('os');
 const crypto = require('crypto');
 const PacketDatabase = require('./database');
+const ChatDatabase = require('./chat-database');
 
 class PacketMonitor {
   constructor(port = 3001) {
@@ -59,8 +60,9 @@ class PacketMonitor {
       localIPs: new Set()           // Your local IPs to protect
     };
     
-    // Initialize database
+    // Initialize databases
     this.database = new PacketDatabase();
+    this.chatDatabase = new ChatDatabase();
     
     this.setupSocketHandlers();
     this.getNetworkInterfaces();
@@ -265,27 +267,27 @@ class PacketMonitor {
 
       // Chat operations
       socket.on('get-chat-conversations', () => {
-        const conversations = this.database.getConversations();
+        const conversations = this.chatDatabase.getConversations();
         socket.emit('chat-conversations-data', conversations);
       });
 
       socket.on('create-chat-conversation', (conversation) => {
-        const success = this.database.createConversation(conversation);
+        const success = this.chatDatabase.createConversation(conversation);
         socket.emit('chat-conversation-created', success);
       });
 
       socket.on('insert-chat-message', (message) => {
-        const success = this.database.insertMessage(message);
+        const success = this.chatDatabase.insertMessage(message);
         socket.emit('chat-message-inserted', success);
       });
 
       socket.on('delete-chat-conversation', (conversationId) => {
-        const success = this.database.deleteConversation(conversationId);
+        const success = this.chatDatabase.deleteConversation(conversationId);
         socket.emit('chat-conversation-deleted', success);
       });
 
       socket.on('update-chat-conversation', (data) => {
-        const success = this.database.updateConversation(data.conversationId, data.updates);
+        const success = this.chatDatabase.updateConversation(data.conversationId, data.updates);
         socket.emit('chat-conversation-updated', success);
       });
       
@@ -1927,10 +1929,48 @@ class PacketMonitor {
       this.initializeSystemBlocking();
     });
   }
+
+  shutdown() {
+    console.log('🔄 Shutting down Packet Monitor Server...');
+    
+    // Stop monitoring if active
+    if (this.isMonitoring) {
+      this.stopMonitoring();
+    }
+    
+    // Close databases
+    if (this.database) {
+      this.database.close();
+      console.log('✓ Packet database closed');
+    }
+    
+    if (this.chatDatabase) {
+      this.chatDatabase.close();
+      console.log('✓ Chat database closed');
+    }
+    
+    // Close server
+    this.server.close(() => {
+      console.log('✓ Server shutdown complete');
+    });
+  }
 }
 
 // Start the server
 const monitor = new PacketMonitor(3001);
 monitor.start();
+
+// Graceful shutdown handling
+process.on('SIGINT', () => {
+  console.log('\n🛑 Received SIGINT. Gracefully shutting down...');
+  monitor.shutdown();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\n🛑 Received SIGTERM. Gracefully shutting down...');
+  monitor.shutdown();
+  process.exit(0);
+});
 
 module.exports = PacketMonitor;
