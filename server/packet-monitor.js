@@ -1085,8 +1085,6 @@ class PacketMonitor {
       const delay = sourceThrottleDelay || destThrottleDelay;
       const throttledIp = sourceThrottleDelay ? packet.sourceIp : packet.destinationIp;
       
-      console.log(`⏱️ THROTTLED: ${packet.sourceIp} → ${packet.destinationIp}:${packet.port} (delay: ${delay}ms)`);
-      
       // Add throttling information to packet
       packet.throttled = true;
       packet.throttleDelay = delay;
@@ -1178,7 +1176,7 @@ class PacketMonitor {
       // Remove blocking rule
       const unblockCommand = `${sudoPrefix}iptables -D INPUT -s ${ip} -j DROP 2>/dev/null`;
       exec(unblockCommand, { timeout: 5000 }, (error) => {
-        console.log(`🛡️ Unblocked IP: ${ip}`);
+        // IP unblocked
       });
       
     } else if (action === 'throttle' && delay) {
@@ -1192,7 +1190,6 @@ class PacketMonitor {
       this.stopCyclicThrottling(ip);
       const unblockCommand = `${sudoPrefix}iptables -D INPUT -s ${ip} -j DROP 2>/dev/null`;
       exec(unblockCommand, { timeout: 5000 }, () => {
-        console.log(`⏱️ Throttling removed for IP: ${ip}`);
       });
     }
   }
