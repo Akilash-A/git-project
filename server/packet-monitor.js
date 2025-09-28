@@ -1167,8 +1167,6 @@ class PacketMonitor {
           } else {
             console.error(`❌ Failed to block IP ${ip}:`, error.message);
           }
-        } else {
-          console.log(`🛡️ Successfully blocked IP: ${ip}`);
         }
       });
       
@@ -1181,12 +1179,10 @@ class PacketMonitor {
       
     } else if (action === 'throttle' && delay) {
       // Apply cyclic throttling
-      console.log(`⏱️ Starting cyclic throttling for IP: ${ip} with ${delay}ms intervals`);
       this.startCyclicThrottling(ip, delay, sudoPrefix);
       
     } else if (action === 'unthrottle') {
       // Stop cyclic throttling
-      console.log(`⏱️ Stopping throttling for IP: ${ip}`);
       this.stopCyclicThrottling(ip);
       const unblockCommand = `${sudoPrefix}iptables -D INPUT -s ${ip} -j DROP 2>/dev/null`;
       exec(unblockCommand, { timeout: 5000 }, () => {
@@ -1467,14 +1463,10 @@ class PacketMonitor {
     };
     
     // Start the cycling interval
-    console.log(`🔄 Starting cyclic throttling: ${delayMs}ms blocked → ${delayMs}ms unblocked → repeat`);
-    
     this.cyclicIntervals[intervalKey] = setInterval(toggleBlock, delayMs);
     
     // Start with unblocked state, then block after a short delay
     setTimeout(toggleBlock, 500);
-    
-    console.log(`⏱️ Cyclic blocking throttling active for ${ip} (${delayMs / 1000}s intervals)`);
   }
 
   applyICMPThrottling(ip, packetsPerSecond, intervalSeconds, sudoPrefix) {
@@ -1583,23 +1575,20 @@ class PacketMonitor {
         // Unblock: Remove DROP rule
         const unblockCmd = `${sudoPrefix}iptables -D INPUT -s ${ip} -j DROP 2>/dev/null`;
         exec(unblockCmd, { timeout: 3000 }, () => {
-          console.log(`🔓 ${ip} unblocked for ${delayMs}ms`);
+          // IP unblocked
         });
         isBlocked = false;
       } else {
         // Block: Add DROP rule
         const blockCmd = `${sudoPrefix}iptables -I INPUT -s ${ip} -j DROP`;
         exec(blockCmd, { timeout: 3000 }, (error) => {
-          if (!error) {
-            console.log(`🔒 ${ip} blocked for ${delayMs}ms`);
-          }
+          // IP blocked
         });
         isBlocked = true;
       }
     };
     
     // Start the cycling
-    console.log(`🔄 Cyclic throttling started: ${delayMs}ms blocked → ${delayMs}ms unblocked`);
     this.cyclicIntervals[intervalKey] = setInterval(toggleBlock, delayMs);
     
     // Start with first block after a short delay
