@@ -276,6 +276,77 @@ class DatabaseService {
     this.socket.emit('stop-monitoring');
   }
 
+  // Chat operations
+  async getChatConversations(): Promise<any[]> {
+    return new Promise((resolve) => {
+      if (!this.socket) {
+        resolve([]);
+        return;
+      }
+
+      this.socket.emit('get-chat-conversations');
+      this.socket.once('chat-conversations-data', (conversations) => {
+        resolve(conversations);
+      });
+    });
+  }
+
+  async createChatConversation(conversation: any): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.socket) {
+        resolve(false);
+        return;
+      }
+
+      this.socket.emit('create-chat-conversation', conversation);
+      this.socket.once('chat-conversation-created', (success) => {
+        resolve(success);
+      });
+    });
+  }
+
+  async insertChatMessage(message: any): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.socket) {
+        resolve(false);
+        return;
+      }
+
+      this.socket.emit('insert-chat-message', message);
+      this.socket.once('chat-message-inserted', (success) => {
+        resolve(success);
+      });
+    });
+  }
+
+  async deleteChatConversation(conversationId: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.socket) {
+        resolve(false);
+        return;
+      }
+
+      this.socket.emit('delete-chat-conversation', conversationId);
+      this.socket.once('chat-conversation-deleted', (success) => {
+        resolve(success);
+      });
+    });
+  }
+
+  async updateChatConversation(conversationId: string, updates: any): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.socket) {
+        resolve(false);
+        return;
+      }
+
+      this.socket.emit('update-chat-conversation', { conversationId, updates });
+      this.socket.once('chat-conversation-updated', (success) => {
+        resolve(success);
+      });
+    });
+  }
+
   // Disconnect
   disconnect() {
     if (this.socket) {

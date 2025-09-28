@@ -11,6 +11,7 @@ import {
   Archive,
   Brain,
   Network,
+  MessageSquare,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 
@@ -120,6 +121,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </Link>
             </TooltipTrigger>
             <TooltipContent side="right">Security Analysis</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/ai-chat"
+                className={cn("flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:text-foreground md:h-8 md:w-8",
+                  pathname === "/ai-chat" ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+                )}
+              >
+                <MessageSquare className="h-5 w-5" />
+                <span className="sr-only">AI Chat</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">AI Chat</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>

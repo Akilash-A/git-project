@@ -262,6 +262,32 @@ class PacketMonitor {
         // Broadcast to all clients that traffic rules have been updated
         this.io.emit('traffic-rules-updated');
       });
+
+      // Chat operations
+      socket.on('get-chat-conversations', () => {
+        const conversations = this.database.getConversations();
+        socket.emit('chat-conversations-data', conversations);
+      });
+
+      socket.on('create-chat-conversation', (conversation) => {
+        const success = this.database.createConversation(conversation);
+        socket.emit('chat-conversation-created', success);
+      });
+
+      socket.on('insert-chat-message', (message) => {
+        const success = this.database.insertMessage(message);
+        socket.emit('chat-message-inserted', success);
+      });
+
+      socket.on('delete-chat-conversation', (conversationId) => {
+        const success = this.database.deleteConversation(conversationId);
+        socket.emit('chat-conversation-deleted', success);
+      });
+
+      socket.on('update-chat-conversation', (data) => {
+        const success = this.database.updateConversation(data.conversationId, data.updates);
+        socket.emit('chat-conversation-updated', success);
+      });
       
       socket.on('disconnect', () => {
         this.connectedClients.delete(socket);
