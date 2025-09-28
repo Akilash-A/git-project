@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   id: string;
@@ -362,7 +363,29 @@ export default function AIChatPage() {
                             : "bg-muted"
                         }`}
                       >
-                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                        {msg.role === "assistant" ? (
+                          <div className="text-sm max-w-none">
+                            <ReactMarkdown
+                              components={{
+                                h1: ({children}) => <h1 className="text-lg font-bold mb-3 text-foreground">{children}</h1>,
+                                h2: ({children}) => <h2 className="text-base font-semibold mb-2 text-foreground">{children}</h2>,
+                                h3: ({children}) => <h3 className="text-sm font-medium mb-2 text-foreground">{children}</h3>,
+                                p: ({children}) => <p className="mb-2 last:mb-0 text-foreground leading-relaxed">{children}</p>,
+                                ul: ({children}) => <ul className="list-disc list-inside mb-3 space-y-1 pl-2">{children}</ul>,
+                                ol: ({children}) => <ol className="list-decimal list-inside mb-3 space-y-1 pl-2">{children}</ol>,
+                                li: ({children}) => <li className="text-sm text-foreground leading-relaxed">{children}</li>,
+                                strong: ({children}) => <strong className="font-semibold text-foreground">{children}</strong>,
+                                em: ({children}) => <em className="italic text-foreground">{children}</em>,
+                                code: ({children}) => <code className="bg-accent/20 px-1.5 py-0.5 rounded text-xs font-mono text-foreground border">{children}</code>,
+                                blockquote: ({children}) => <blockquote className="border-l-4 border-accent pl-4 italic mb-2">{children}</blockquote>,
+                              }}
+                            >
+                              {msg.content}
+                            </ReactMarkdown>
+                          </div>
+                        ) : (
+                          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                        )}
                         <p className="text-xs opacity-70 mt-1">
                           {new Date(msg.timestamp).toLocaleTimeString()}
                         </p>
