@@ -19,6 +19,42 @@ interface TypeWriterProps {
   onComplete?: () => void;
 }
 
+// Simple typing animation for titles (without cursor)
+interface TitleTypeWriterProps {
+  text: string;
+  speed?: number;
+  className?: string;
+  onComplete?: () => void;
+}
+
+function TitleTypeWriter({ text, speed = 80, className = "", onComplete }: TitleTypeWriterProps) {
+  const [displayText, setDisplayText] = useState("");
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
+
+  useEffect(() => {
+    if (currentIndex < text.length) {
+      const timer = setTimeout(() => {
+        setDisplayText(prev => prev + text[currentIndex]);
+        setCurrentIndex(prev => prev + 1);
+      }, speed);
+      return () => clearTimeout(timer);
+    } else if (!isComplete) {
+      setIsComplete(true);
+      onComplete?.();
+    }
+  }, [currentIndex, text, speed, onComplete, isComplete]);
+
+  // Reset when text changes
+  useEffect(() => {
+    setDisplayText("");
+    setCurrentIndex(0);
+    setIsComplete(false);
+  }, [text]);
+
+  return <span className={className}>{displayText}</span>;
+}
+
 function TypeWriter({ text, speed = 30, onComplete }: TypeWriterProps) {
   const [displayText, setDisplayText] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -45,30 +81,41 @@ function TypeWriter({ text, speed = 30, onComplete }: TypeWriterProps) {
     setIsComplete(false);
   }, [text]);
 
+  // Add cursor directly to the text to prevent line wrapping issues
+  const textWithCursor = !isComplete ? displayText + '|' : displayText;
+  
   return (
     <div className="text-sm max-w-none">
-      <div className="inline">
-        <ReactMarkdown
-          components={{
-            h1: ({children}) => <h1 className="text-lg font-bold mb-3 text-foreground">{children}</h1>,
-            h2: ({children}) => <h2 className="text-base font-semibold mb-2 text-foreground">{children}</h2>,
-            h3: ({children}) => <h3 className="text-sm font-medium mb-2 text-foreground">{children}</h3>,
-            p: ({children}) => <p className="mb-2 last:mb-0 text-foreground leading-relaxed inline">{children}</p>,
-            ul: ({children}) => <ul className="list-disc list-inside mb-3 space-y-1 pl-2">{children}</ul>,
-            ol: ({children}) => <ol className="list-decimal list-inside mb-3 space-y-1 pl-2">{children}</ol>,
-            li: ({children}) => <li className="text-sm text-foreground leading-relaxed">{children}</li>,
-            strong: ({children}) => <strong className="font-semibold text-foreground">{children}</strong>,
-            em: ({children}) => <em className="italic text-foreground">{children}</em>,
-            code: ({children}) => <code className="bg-accent/20 px-1.5 py-0.5 rounded text-xs font-mono text-foreground border">{children}</code>,
-            blockquote: ({children}) => <blockquote className="border-l-4 border-accent pl-4 italic mb-2">{children}</blockquote>,
-          }}
-        >
-          {displayText}
-        </ReactMarkdown>
-        {!isComplete && (
-          <span className="text-foreground animate-pulse">|</span>
-        )}
-      </div>
+      <ReactMarkdown
+        components={{
+          h1: ({children}) => <h1 className="text-lg font-bold mb-3 text-foreground">{children}</h1>,
+          h2: ({children}) => <h2 className="text-base font-semibold mb-2 text-foreground">{children}</h2>,
+          h3: ({children}) => <h3 className="text-sm font-medium mb-2 text-foreground">{children}</h3>,
+          p: ({children}) => {
+            // Apply blinking animation to cursor if it's at the end of the paragraph
+            const content = String(children);
+            if (!isComplete && content.endsWith('|')) {
+              const textContent = content.slice(0, -1);
+              return (
+                <p className="mb-2 last:mb-0 text-foreground leading-relaxed">
+                  {textContent}
+                  <span className="animate-pulse">|</span>
+                </p>
+              );
+            }
+            return <p className="mb-2 last:mb-0 text-foreground leading-relaxed">{children}</p>;
+          },
+          ul: ({children}) => <ul className="list-disc list-inside mb-3 space-y-1 pl-2">{children}</ul>,
+          ol: ({children}) => <ol className="list-decimal list-inside mb-3 space-y-1 pl-2">{children}</ol>,
+          li: ({children}) => <li className="text-sm text-foreground leading-relaxed">{children}</li>,
+          strong: ({children}) => <strong className="font-semibold text-foreground">{children}</strong>,
+          em: ({children}) => <em className="italic text-foreground">{children}</em>,
+          code: ({children}) => <code className="bg-accent/20 px-1.5 py-0.5 rounded text-xs font-mono text-foreground border">{children}</code>,
+          blockquote: ({children}) => <blockquote className="border-l-4 border-accent pl-4 italic mb-2">{children}</blockquote>,
+        }}
+      >
+        {textWithCursor}
+      </ReactMarkdown>
     </div>
   );
 }
@@ -96,6 +143,7 @@ export default function AIChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [typingMessageIds, setTypingMessageIds] = useState<Set<string>>(new Set());
+  const [typingTitleIds, setTypingTitleIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Handle typing animation completion
@@ -103,6 +151,15 @@ export default function AIChatPage() {
     setTypingMessageIds(prev => {
       const newSet = new Set(prev);
       newSet.delete(messageId);
+      return newSet;
+    });
+  };
+
+  // Handle title typing animation completion
+  const handleTitleTypingComplete = (conversationId: string) => {
+    setTypingTitleIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(conversationId);
       return newSet;
     });
   };
@@ -212,13 +269,23 @@ export default function AIChatPage() {
         // Add message ID to typing set
         setTypingMessageIds(prev => new Set(prev).add(assistantMessageId));
 
+        // Check if title has changed to trigger typing animation
+        const newTitle = data.conversationTitle || updatedConversation.title;
+        const titleChanged = newTitle !== updatedConversation.title && newTitle !== "New Conversation";
+
         const finalConversation = {
           ...updatedConversation,
+          title: newTitle,
           messages: [...updatedConversation.messages, assistantMessage],
           updatedAt: new Date(),
         };
 
         setCurrentConversation(finalConversation);
+
+        // Trigger title typing animation if title changed
+        if (titleChanged) {
+          setTypingTitleIds(prev => new Set(prev).add(finalConversation.id));
+        }
 
         // Reload conversations from database to ensure sync
         await loadChatHistory();
@@ -283,9 +350,9 @@ export default function AIChatPage() {
   };
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background overflow-hidden">
       {/* Sidebar - Chat History */}
-      <div className="w-80 border-r border-border bg-muted/10">
+      <div className="w-80 border-r border-border bg-muted/10 flex flex-col min-h-0">
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -326,7 +393,16 @@ export default function AIChatPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
-                          {conversation.title}
+                          {typingTitleIds.has(conversation.id) ? (
+                            <TitleTypeWriter 
+                              text={conversation.title} 
+                              speed={80}
+                              className="text-sm font-medium"
+                              onComplete={() => handleTitleTypingComplete(conversation.id)}
+                            />
+                          ) : (
+                            conversation.title
+                          )}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
                           {conversation.messages.length} messages
@@ -374,12 +450,23 @@ export default function AIChatPage() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0">
         {currentConversation ? (
           <>
             {/* Chat Header */}
             <div className="border-b border-border p-4">
-              <h1 className="text-xl font-semibold">{currentConversation.title}</h1>
+              <h1 className="text-xl font-semibold">
+                {typingTitleIds.has(currentConversation.id) ? (
+                  <TitleTypeWriter 
+                    text={currentConversation.title} 
+                    speed={80}
+                    className="text-xl font-semibold"
+                    onComplete={() => handleTitleTypingComplete(currentConversation.id)}
+                  />
+                ) : (
+                  currentConversation.title
+                )}
+              </h1>
               <p className="text-sm text-muted-foreground">
                 Ask about security threats, IP analysis, attack patterns, and network security
               </p>
@@ -445,7 +532,7 @@ export default function AIChatPage() {
                             {msg.isTyping && typingMessageIds.has(msg.id) ? (
                               <TypeWriter
                                 text={msg.content}
-                                speed={15}
+                                speed={25}
                                 onComplete={() => handleTypingComplete(msg.id)}
                               />
                             ) : (

@@ -224,8 +224,8 @@ Generate only the title, nothing else.`,
   }
 }
 
-// AI response generation using Google AI with database access
-async function generateAIResponse(userMessage: string, db?: any): Promise<string> {
+// AI response generation using Google AI with database access and conversation history
+async function generateAIResponse(userMessage: string, conversationHistory: any[] = [], db?: any): Promise<string> {
   try {
     // Check if the message contains an IP address for specific analysis
     const ipRegex = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
@@ -270,6 +270,17 @@ async function generateAIResponse(userMessage: string, db?: any): Promise<string
     const packetContext = queryPacketDatabase(userMessage);
     contextualInfo += packetContext;
 
+    // Build conversation history context
+    let conversationContext = '';
+    if (conversationHistory && conversationHistory.length > 0) {
+      conversationContext = '\n\n**Conversation History:**\n';
+      conversationHistory.forEach((msg, index) => {
+        const role = msg.role === 'user' ? 'User' : 'NetGuardian';
+        conversationContext += `${role}: ${msg.content}\n\n`;
+      });
+      conversationContext += '---\n\n';
+    }
+
     const response = await ai.generate({
       prompt: `You are NetGuardian, an advanced AI security assistant specializing in network security, threat analysis, and cybersecurity guidance.
 
@@ -292,8 +303,9 @@ async function generateAIResponse(userMessage: string, db?: any): Promise<string
 - Format responses with markdown for better readability
 - Focus on real-world security implications
 - Reference database data when relevant to user questions
+- **IMPORTANT**: Always refer to previous messages in this conversation when relevant - you can see IP addresses, topics, or requests mentioned earlier
 
-**User Message:** ${userMessage}
+${conversationContext}**Current User Message:** ${userMessage}
 
 ${contextualInfo}
 
@@ -393,8 +405,8 @@ export async function POST(request: NextRequest) {
       saveMessageStmt.run(userMessageData.id, userMessageData.conversationId, userMessageData.content, userMessageData.role, userMessageData.timestamp);
       console.log('Saved user message:', userMessageData.id);
       
-      // Generate AI response using Google AI with database access
-      const aiResponse = await generateAIResponse(message, db);
+      // Generate AI response using Google AI with database access and conversation history
+      const aiResponse = await generateAIResponse(message, messages || [], db);
       
       // Save AI message
       const aiMessageData = {
@@ -412,9 +424,16 @@ export async function POST(request: NextRequest) {
       const updateConversationStmt = db.prepare('UPDATE chat_conversations SET updated_at = ? WHERE id = ?');
       updateConversationStmt.run(new Date().toISOString(), conversationId);
       
+      // Get the updated conversation title to return to frontend
+      const getConversationStmt = db.prepare('SELECT title FROM chat_conversations WHERE id = ?');
+      const conversationData = getConversationStmt.get(conversationId);
+      
       db.close();
       
-      return NextResponse.json({ response: aiResponse });
+      return NextResponse.json({ 
+        response: aiResponse,
+        conversationTitle: conversationData?.title || 'New Conversation'
+      });
       
     } catch (dbError) {
       console.error('Database error:', dbError);
